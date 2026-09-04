@@ -1,0 +1,6 @@
+{
+  "name": "Warung POS & Inventory Management",
+  "description": "A lightweight internal POS, inventory, restock, and finance management web app for small warungs and toko kelontong.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
