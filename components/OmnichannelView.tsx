@@ -44,7 +44,6 @@ export const OmnichannelView: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'channels' | 'mappings' | 'errors'>('channels');
-  const [selectedChannelCategory, setSelectedChannelCategory] = useState<'All' | 'Marketplace' | 'Food Delivery' | 'Offline'>('All');
   const [searchMappingQuery, setSearchMappingQuery] = useState('');
   const [mappingStatusFilter, setMappingStatusFilter] = useState<'all' | 'mapped' | 'unmapped'>('all');
   const [mappingChannelFilter, setMappingChannelFilter] = useState<string>('all');
@@ -115,11 +114,8 @@ export const OmnichannelView: React.FC = () => {
     setIsSimulateModalOpen(true);
   };
 
-  // Filtered Integrations
-  const filteredIntegrations = channelIntegrations.filter(c => {
-    if (selectedChannelCategory === 'All') return true;
-    return c.category === selectedChannelCategory;
-  });
+  // Integrations (all channels)
+  const filteredIntegrations = channelIntegrations;
 
   // Filtered Mappings
   const filteredMappings = productMappings.filter(m => {
@@ -140,46 +136,6 @@ export const OmnichannelView: React.FC = () => {
 
   return (
     <div id="omnichannel-view-container" className="space-y-6">
-      {/* Top Header & Overview */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-6 bg-white border border-slate-200 rounded-2xl shadow-xs">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-100 text-teal-600">
-              <Globe size={22} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">
-                Integrasi Saluran Penjualan (Omnichannel)
-              </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Sinkronisasi pesanan dari Shopee, Tokopedia, TikTok Shop, GoFood, GrabFood & Kasir Offline ke 1 inventaris pusat.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 shrink-0">
-          <button
-            id="btn-simulate-incoming-order"
-            onClick={() => setIsSimulateModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold shadow-xs transition-colors"
-          >
-            <Sparkles size={15} className="text-teal-600" />
-            Simulasi Pesanan Masuk
-          </button>
-
-          <button
-            id="btn-sync-all-channels"
-            disabled={syncingChannel !== null}
-            onClick={handleSyncAll}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={syncingChannel === 'all' ? 'animate-spin' : ''} />
-            Sinkronkan Semua Saluran
-          </button>
-        </div>
-      </div>
-
       {/* Sync feedback banner */}
       {syncFeedback && (
         <div
@@ -252,13 +208,13 @@ export const OmnichannelView: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs Bar */}
-      <div className="flex items-center justify-between border-b border-slate-200">
-        <div className="flex items-center gap-2">
+      {/* Tabs & Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2 sm:pb-0">
+        <div className="flex items-center gap-2 overflow-x-auto">
           <button
             id="tab-view-channels"
             onClick={() => setActiveTab('channels')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+            className={`flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
               activeTab === 'channels'
                 ? 'border-teal-600 text-teal-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -271,7 +227,7 @@ export const OmnichannelView: React.FC = () => {
           <button
             id="tab-view-mappings"
             onClick={() => setActiveTab('mappings')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+            className={`flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
               activeTab === 'mappings'
                 ? 'border-teal-600 text-teal-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -284,7 +240,7 @@ export const OmnichannelView: React.FC = () => {
           <button
             id="tab-view-errors"
             onClick={() => setActiveTab('errors')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 transition-colors relative cursor-pointer ${
+            className={`flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 transition-colors relative cursor-pointer shrink-0 ${
               activeTab === 'errors'
                 ? 'border-teal-600 text-teal-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -299,29 +255,33 @@ export const OmnichannelView: React.FC = () => {
             )}
           </button>
         </div>
+
+        {/* Action Buttons inline with Tabs */}
+        <div className="flex items-center gap-2 shrink-0 pb-1 sm:pb-2">
+          <button
+            id="btn-simulate-incoming-order"
+            onClick={() => setIsSimulateModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+          >
+            <Sparkles size={14} className="text-teal-600" />
+            <span>Simulasi Pesanan</span>
+          </button>
+
+          <button
+            id="btn-sync-all-channels"
+            disabled={syncingChannel !== null}
+            onClick={handleSyncAll}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            <RefreshCw size={13} className={syncingChannel === 'all' ? 'animate-spin' : ''} />
+            <span>Sinkronkan Semua Saluran</span>
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: CHANNELS LIST */}
       {activeTab === 'channels' && (
         <div className="space-y-4">
-          {/* Channel category filter pills */}
-          <div className="flex items-center gap-2">
-            {(['All', 'Marketplace', 'Food Delivery', 'Offline'] as const).map(cat => (
-              <button
-                key={cat}
-                id={`btn-filter-cat-${cat.toLowerCase().replace(/\s+/g, '-')}`}
-                onClick={() => setSelectedChannelCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-                  selectedChannelCategory === cat
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-                }`}
-              >
-                {cat === 'All' ? 'Semua Kategori' : cat}
-              </button>
-            ))}
-          </div>
-
           {/* Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredIntegrations.map(integ => {

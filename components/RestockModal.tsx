@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatRupiah, formatDate, calculateWeightedCOGS } from '@/lib/utils';
-import { X, PackagePlus, History, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { X, PackagePlus, History, ArrowRight, CheckCircle2, Building2 } from 'lucide-react';
 
 interface RestockModalProps {
   productId?: string | null;
@@ -11,7 +11,18 @@ interface RestockModalProps {
 }
 
 export function RestockModal({ productId, onClose }: RestockModalProps) {
-  const { products, restocks, restockProduct, restockModalProductId, setRestockModalProductId } = useApp();
+  const {
+    products,
+    restocks,
+    restockProduct,
+    restockModalProductId,
+    setRestockModalProductId,
+    branches,
+    activeBranchId,
+    accessibleBranches,
+    canSwitchToAllBranches,
+    getProductStockInBranch,
+  } = useApp();
   
   const effectiveProductId = productId !== undefined ? productId : restockModalProductId;
 
@@ -19,6 +30,14 @@ export function RestockModal({ productId, onClose }: RestockModalProps) {
     () => effectiveProductId || (products[0]?.id ?? '')
   );
   const selectedProduct = products.find((p) => p.id === selectedProductId);
+
+  // Destination branch state
+  const defaultBranchId = activeBranchId !== 'all'
+    ? activeBranchId
+    : (accessibleBranches.find((b) => b.status === 'Active')?.id || accessibleBranches[0]?.id || branches[0]?.id || 'branch-1');
+  const [targetBranchId, setTargetBranchId] = useState<string>(defaultBranchId);
+
+  const targetBranch = branches.find((b) => b.id === targetBranchId) || branches[0];
 
   const [quantity, setQuantity] = useState<number | ''>('');
   const [purchaseCost, setPurchaseCost] = useState<number | ''>(() => selectedProduct?.cogs || '');
@@ -46,11 +65,13 @@ export function RestockModal({ productId, onClose }: RestockModalProps) {
   if (!productId && !selectedProductId) return null;
 
   const currentStock = selectedProduct ? selectedProduct.stock : 0;
+  const currentBranchStock = selectedProduct ? getProductStockInBranch(selectedProduct.id, targetBranchId) : 0;
   const currentCogs = selectedProduct ? selectedProduct.cogs : 0;
   const numQuantity = typeof quantity === 'number' ? quantity : 0;
   const numPurchaseCost = typeof purchaseCost === 'number' ? purchaseCost : 0;
 
   const resultingStock = currentStock + numQuantity;
+  const resultingBranchStock = currentBranchStock + numQuantity;
   const totalRestockCost = numQuantity * numPurchaseCost;
   const newWeightedCogs = selectedProduct
     ? calculateWeightedCOGS(currentStock, currentCogs, numQuantity, numPurchaseCost)
@@ -62,10 +83,10 @@ export function RestockModal({ productId, onClose }: RestockModalProps) {
 
     setIsSubmitting(true);
     try {
-      const res = await restockProduct(selectedProduct.id, numQuantity, numPurchaseCost, notes);
+      const res = await restockProduct(selectedProduct.id, numQuantity, numPurchaseCost, notes, targetBranchId);
       if (res) {
         setSuccessMessage(
-          `Berhasil restock ${numQuantity} ${selectedProduct.unit} ${selectedProduct.name}! Stok sekarang: ${resultingStock} ${selectedProduct.unit}.`
+          `Berhasil restock ${numQuantity} ${selectedProduct.unit} ${selectedProduct.name} ke ${targetBranch?.name || 'Cabang'}! Stok cabang: ${resultingBranchStock} ${selectedProduct.unit}.`
         );
         setQuantity('');
         setNotes('');
@@ -150,10 +171,35 @@ export function RestockModal({ productId, onClose }: RestockModalProps) {
         <div className="p-6 overflow-y-auto space-y-6">
           {activeTab === 'form' ? (
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Branch Selector */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Cabang Tujuan Restock <span className="text-teal-600">*</span>
+                </label>
+                {canSwitchToAllBranches ? (
+                  <select
+                    value={targetBranchId}
+                    onChange={(e) => setTargetBranchId(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-teal-500 transition-colors"
+                  >
+                    {accessibleBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.code}){b.status === 'Inactive' ? ' - Nonaktif' : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex items-center space-x-2 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800">
+                    <Building2 className="w-4 h-4 text-teal-600" />
+                    <span>{targetBranch?.name} ({targetBranch?.code})</span>
+                  </div>
+                )}
+              </div>
+
               {/* Product Selector */}
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                  Pilih Produk
+                  Pilih Produk <span className="text-teal-600">*</span>
                 </label>
                 <select
                   value={selectedProductId}
@@ -164,7 +210,7 @@ export function RestockModal({ productId, onClose }: RestockModalProps) {
                     .filter((p) => !p.isArchived)
                     .map((prod) => (
                       <option key={prod.id} value={prod.id}>
-                        {prod.name} (Stok saat ini: {prod.stock} {prod.unit})
+                        {prod.name} (Total: {prod.stock} {prod.unit})
                       </option>
                     ))}
                 </select>
@@ -173,20 +219,26 @@ export function RestockModal({ productId, onClose }: RestockModalProps) {
               {selectedProduct && (
                 <>
                   {/* Current Status Info Box */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
                     <div>
                       <span className="text-slate-500 block font-normal">Kategori:</span>
                       <span className="text-slate-800 font-semibold">{selectedProduct.category}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block font-normal">Stok Saat Ini:</span>
-                      <span className={`font-semibold ${selectedProduct.stock <= (selectedProduct.minStockThreshold ?? 5) ? 'text-amber-600' : 'text-slate-800'}`}>
+                      <span className="text-slate-500 block font-normal">Stok Cabang Ini:</span>
+                      <span className="text-teal-700 font-bold">
+                        {currentBranchStock} {selectedProduct.unit}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block font-normal">Total Semua Cabang:</span>
+                      <span className="font-semibold text-slate-800">
                         {selectedProduct.stock} {selectedProduct.unit}
                       </span>
                     </div>
                     <div>
                       <span className="text-slate-500 block font-normal">HPP / Modal Lama:</span>
-                      <span className="text-teal-700 font-semibold">{formatRupiah(selectedProduct.cogs)}</span>
+                      <span className="text-slate-700 font-semibold">{formatRupiah(selectedProduct.cogs)}</span>
                     </div>
                   </div>
 
@@ -303,6 +355,7 @@ export function RestockModal({ productId, onClose }: RestockModalProps) {
                       <tr>
                         <th className="p-3.5">Tanggal</th>
                         <th className="p-3.5">Produk</th>
+                        <th className="p-3.5">Cabang</th>
                         <th className="p-3.5 text-right">Jumlah</th>
                         <th className="p-3.5 text-right">Harga Beli/Item</th>
                         <th className="p-3.5 text-right">Total Biaya</th>
@@ -313,6 +366,12 @@ export function RestockModal({ productId, onClose }: RestockModalProps) {
                         <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="p-3.5 text-slate-500">{formatDate(r.date, true)}</td>
                           <td className="p-3.5 font-semibold text-slate-800">{r.productName}</td>
+                          <td className="p-3.5">
+                            <span className="inline-flex items-center space-x-1 font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                              <Building2 className="w-3 h-3 text-slate-400" />
+                              <span>{r.branchName || branches.find((b) => b.id === r.branchId)?.name || 'Cabang Pusat'}</span>
+                            </span>
+                          </td>
                           <td className="p-3.5 text-right text-teal-600 font-bold">+{r.quantity}</td>
                           <td className="p-3.5 text-right text-slate-600">{formatRupiah(r.purchaseCostPerItem)}</td>
                           <td className="p-3.5 text-right text-slate-900 font-semibold">{formatRupiah(r.totalCost)}</td>

@@ -8,8 +8,10 @@ import { AuthView } from '@/components/AuthView';
 import { OnboardingView } from '@/components/OnboardingView';
 import { DashboardView } from '@/components/DashboardView';
 import { ProductsView } from '@/components/ProductsView';
+import { InventarisView } from '@/components/InventarisView';
 import { OrdersView } from '@/components/OrdersView';
 import { FinanceView } from '@/components/FinanceView';
+import { BranchManagementView } from '@/components/BranchManagementView';
 import { SettingsView } from '@/components/SettingsView';
 import { PerangkatKasirView } from '@/components/PerangkatKasirView';
 import { UserManagementView } from '@/components/UserManagementView';
@@ -65,7 +67,9 @@ function MainAppContent() {
           {activeTab === 'dashboard' && <DashboardView />}
           {activeTab === 'orders' && <OrdersView />}
           {activeTab === 'products' && <ProductsView />}
+          {(activeTab === 'inventory' || activeTab === 'stock_opname') && <InventarisView />}
           {activeTab === 'finance' && <FinanceView />}
+          {activeTab === 'branches' && <BranchManagementView />}
           {activeTab === 'perangkat_kasir' && <PerangkatKasirView />}
           {activeTab === 'integrasi_channel' && <OmnichannelView />}
           {activeTab === 'users' && <UserManagementView />}

@@ -17,6 +17,8 @@ import {
   ChannelIntegration,
   ProductChannelMapping,
   ChannelSyncError,
+  Branch,
+  ProductInventory,
 } from '@/types';
 import {
   INITIAL_CATEGORIES,
@@ -33,6 +35,9 @@ import {
   INITIAL_CHANNEL_INTEGRATIONS,
   INITIAL_PRODUCT_MAPPINGS,
   INITIAL_CHANNEL_SYNC_ERRORS,
+  INITIAL_BRANCHES,
+  INITIAL_PRODUCT_INVENTORIES,
+  generateProductInventories,
 } from '@/lib/storage';
 import { DEFAULT_ROLES, STAGING_INITIAL_USERS } from '@/lib/rbac';
 
@@ -67,6 +72,8 @@ export interface UserDatabaseState {
   products: Product[];
   categories: Category[];
   racks: Rack[];
+  branches?: Branch[];
+  productInventories?: ProductInventory[];
   stockOpnames: StockOpname[];
   stockOpnameSchedules: StockOpnameSchedule[];
   orders: Order[];
@@ -91,12 +98,17 @@ export function isStagingUser(email?: string, userId?: string): boolean {
   const em = (email || '').toLowerCase().trim();
   return em === STAGING_EMAIL.toLowerCase() ||
          em === 'tenmatheresa96@gmail.com' ||
+         em.includes('staging') ||
+         em.includes('test') ||
+         em.includes('demo') ||
          userId === STAGING_USER_ID;
 }
 
 export function getStagingInitialData(): UserDatabaseState {
   return {
-    dataVersion: 2,
+    dataVersion: 3,
+    branches: JSON.parse(JSON.stringify(INITIAL_BRANCHES)),
+    productInventories: JSON.parse(JSON.stringify(INITIAL_PRODUCT_INVENTORIES)),
     products: JSON.parse(JSON.stringify(INITIAL_PRODUCTS)),
     categories: JSON.parse(JSON.stringify(INITIAL_CATEGORIES)),
     racks: JSON.parse(JSON.stringify(INITIAL_RACKS)),
@@ -140,8 +152,25 @@ export function getNewClientInitialData(name: string, email: string, username: s
     onboardingCompleted: false,
   };
 
+  const newClientBranches: Branch[] = [
+    {
+      id: `branch-${Date.now()}-1`,
+      name: 'Cabang Utama',
+      code: 'CBG-01',
+      address: 'Pusat Operasional / Toko Utama',
+      phone: '',
+      status: 'Active',
+      createdAt: new Date().toISOString(),
+    },
+  ];
+
+  const initialProducts = JSON.parse(JSON.stringify(INITIAL_SEED_PRODUCTS));
+  const newClientInventories = generateProductInventories(initialProducts, newClientBranches);
+
   return {
-    products: JSON.parse(JSON.stringify(INITIAL_SEED_PRODUCTS)),
+    branches: newClientBranches,
+    productInventories: newClientInventories,
+    products: initialProducts,
     categories: [
       { id: 'cat-c1', name: 'Makanan & Mie' },
       { id: 'cat-c2', name: 'Minuman' },
@@ -203,8 +232,8 @@ export const localUserDataStore = {
       if (saved) {
         const parsed: UserDatabaseState = JSON.parse(saved);
 
-        // If staging user, check if data needs to be upgraded to version 2 (with 28 products and 21 orders)
-        if (isStagingUser(email, userId) && (!parsed.dataVersion || parsed.dataVersion < 2 || !parsed.products || parsed.products.length < 20)) {
+        // If staging user, check if data needs to be upgraded to version 3 (with 28 products, 36+ orders, 10 restocks, 30 days finance & 3 opnames)
+        if (isStagingUser(email, userId) && (!parsed.dataVersion || parsed.dataVersion < 3 || !parsed.products || parsed.products.length < 20 || !parsed.orders || parsed.orders.length < 30)) {
           const updated = getStagingInitialData();
           localStorage.setItem(key, JSON.stringify(updated));
           return updated;
@@ -213,6 +242,14 @@ export const localUserDataStore = {
         // If products is empty, populate with INITIAL_SEED_PRODUCTS so inventory is immediately usable for testing
         if (!parsed.products || parsed.products.length === 0) {
           parsed.products = JSON.parse(JSON.stringify(INITIAL_SEED_PRODUCTS));
+        }
+
+        // Ensure branches & product inventories exist in stored state
+        if (!parsed.branches || parsed.branches.length === 0) {
+          parsed.branches = JSON.parse(JSON.stringify(INITIAL_BRANCHES));
+        }
+        if (!parsed.productInventories || parsed.productInventories.length === 0) {
+          parsed.productInventories = generateProductInventories(parsed.products, parsed.branches);
         }
 
         // Ensure roles, users, racks, stockOpnames exist in older stored states

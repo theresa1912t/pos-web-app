@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { StockOpname, StockOpnameItem, StockOpnameSchedule, Product } from '@/types';
 import { formatRupiah, formatTime } from '@/lib/utils';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { TablePagination } from '@/components/TablePagination';
 import {
   ClipboardCheck,
   Plus,
@@ -29,7 +31,20 @@ import {
   Check,
 } from 'lucide-react';
 
-export function StockOpnameTab() {
+export interface StockOpnameTabRef {
+  startNewOpname: () => void;
+  openSchedule: () => void;
+  getView: () => 'list' | 'wizard' | 'schedule' | 'detail';
+}
+
+export interface StockOpnameTabProps {
+  onViewChange?: (view: 'list' | 'wizard' | 'schedule' | 'detail') => void;
+}
+
+export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>(function StockOpnameTab(
+  props,
+  ref
+) {
   const {
     stockOpnames,
     stockOpnameSchedules,
@@ -75,6 +90,21 @@ export function StockOpnameTab() {
   });
   const [scheduleScope, setScheduleScope] = useState<'All' | 'Category' | 'Rack'>('All');
 
+  // Confirmation dialog states
+  const [confirmDeleteOpname, setConfirmDeleteOpname] = useState<StockOpname | null>(null);
+  const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState<StockOpnameSchedule | null>(null);
+  const [showConfirmFinalize, setShowConfirmFinalize] = useState(false);
+  const [showConfirmSaveDraft, setShowConfirmSaveDraft] = useState(false);
+
+  // Pagination for Opname History Table (Standard 20 rows per page)
+  const [historyPage, setHistoryPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
+  const pagedStockOpnames = useMemo(() => {
+    const start = (historyPage - 1) * ITEMS_PER_PAGE;
+    return stockOpnames.slice(start, start + ITEMS_PER_PAGE);
+  }, [stockOpnames, historyPage]);
+
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -95,6 +125,18 @@ export function StockOpnameTab() {
     setActiveItems([]);
     setView('wizard');
   };
+
+  // Imperative handle for parent component
+  useImperativeHandle(ref, () => ({
+    startNewOpname: handleStartNewOpname,
+    openSchedule: () => setView('schedule'),
+    getView: () => view,
+  }));
+
+  // Sync view change to parent
+  useEffect(() => {
+    props.onViewChange?.(view);
+  }, [view, props]);
 
   // Resume or edit existing draft opname
   const handleResumeOpname = (opname: StockOpname) => {
@@ -282,35 +324,6 @@ export function StockOpnameTab() {
       {/* TOP HEADER CONTROLS */}
       {view === 'list' && (
         <div className="space-y-4">
-          <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Pusat Stock Opname (Rekonsiliasi Fisik)</h3>
-              <p className="text-[11px] text-slate-500">
-                Pencocokan stok riil gudang/rak dengan catatan sistem untuk akurasi laporan laba rugi
-              </p>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => setView('schedule')}
-                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
-              >
-                <Calendar className="w-3.5 h-3.5 text-teal-600" />
-                <span>Jadwal Opname ({stockOpnameSchedules.length})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleStartNewOpname}
-                className="flex items-center space-x-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Mulai Stock Opname Baru</span>
-              </button>
-            </div>
-          </div>
-
           {/* Opname Summary Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
@@ -364,7 +377,7 @@ export function StockOpnameTab() {
                       </td>
                     </tr>
                   ) : (
-                    stockOpnames.map((so) => (
+                    pagedStockOpnames.map((so) => (
                       <tr key={so.id} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-3 px-4 font-mono font-bold text-teal-700">{so.opnameNumber}</td>
                         <td className="py-3 px-4">
@@ -378,7 +391,7 @@ export function StockOpnameTab() {
                           <div className="text-[10px] text-slate-400">{so.performedBy}</div>
                         </td>
                         <td className="py-3 px-4">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700">
+                          <span className="text-xs text-slate-700 font-medium">
                             {so.scope === 'All'
                               ? 'Semua Produk'
                               : `${so.scope}: ${so.scopeTargetName || so.scopeTargetId}`}
@@ -449,12 +462,7 @@ export function StockOpnameTab() {
                             {so.status === 'Draft' && (
                               <button
                                 type="button"
-                                onClick={async () => {
-                                  if (confirm(`Hapus draf sesi ${so.opnameNumber}?`)) {
-                                    await deleteStockOpname(so.id);
-                                    showToast('Draf opname berhasil dihapus.');
-                                  }
-                                }}
+                                onClick={() => setConfirmDeleteOpname(so)}
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                                 title="Hapus Draf"
                               >
@@ -469,6 +477,15 @@ export function StockOpnameTab() {
                 </tbody>
               </table>
             </div>
+
+            {/* Standard 20-row Pagination Bar */}
+            <TablePagination
+              currentPage={historyPage}
+              totalItems={stockOpnames.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={setHistoryPage}
+              itemName="sesi stock opname"
+            />
           </div>
         </div>
       )}
@@ -961,7 +978,7 @@ export function StockOpnameTab() {
                 <div className="flex items-center space-x-2">
                   <button
                     type="button"
-                    onClick={handleSaveDraft}
+                    onClick={() => setShowConfirmSaveDraft(true)}
                     disabled={isSubmitting}
                     className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
                   >
@@ -971,7 +988,7 @@ export function StockOpnameTab() {
                   <button
                     type="button"
                     disabled={isSubmitting}
-                    onClick={handleFinalize}
+                    onClick={() => setShowConfirmFinalize(true)}
                     className="flex items-center space-x-2 px-6 py-2.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
                   >
                     <Check className="w-4 h-4" />
@@ -1161,12 +1178,7 @@ export function StockOpnameTab() {
 
                     <button
                       type="button"
-                      onClick={async () => {
-                        if (confirm(`Hapus jadwal "${sch.title}"?`)) {
-                          await deleteStockOpnameSchedule(sch.id);
-                          showToast('Jadwal berhasil dihapus.');
-                        }
-                      }}
+                      onClick={() => setConfirmDeleteSchedule(sch)}
                       className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1300,6 +1312,77 @@ export function StockOpnameTab() {
           subtitle="Arahkan kamera ke barcode produk untuk menambah hitungan fisik secara instan"
         />
       )}
+
+      {/* Confirmation Dialogs */}
+      <ConfirmDialog
+        isOpen={Boolean(confirmDeleteOpname)}
+        onClose={() => setConfirmDeleteOpname(null)}
+        onConfirm={async () => {
+          if (confirmDeleteOpname) {
+            await deleteStockOpname(confirmDeleteOpname.id);
+            showToast(`Draf sesi ${confirmDeleteOpname.opnameNumber} berhasil dihapus.`);
+            setConfirmDeleteOpname(null);
+          }
+        }}
+        type="danger"
+        title="Hapus Draf Stock Opname?"
+        description={
+          <span>
+            Apakah Anda yakin ingin menghapus draf sesi <strong>{confirmDeleteOpname?.opnameNumber}</strong>? Data hitungan fisik yang belum difinalisasi akan dihapus.
+          </span>
+        }
+        confirmText="Hapus Draf"
+        cancelText="Batal"
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(confirmDeleteSchedule)}
+        onClose={() => setConfirmDeleteSchedule(null)}
+        onConfirm={async () => {
+          if (confirmDeleteSchedule) {
+            await deleteStockOpnameSchedule(confirmDeleteSchedule.id);
+            showToast('Jadwal stock opname berhasil dihapus.');
+            setConfirmDeleteSchedule(null);
+          }
+        }}
+        type="danger"
+        title="Hapus Jadwal Stock Opname?"
+        description={
+          <span>
+            Hapus agenda jadwal <strong>{confirmDeleteSchedule?.title}</strong>? Agenda ini tidak akan muncul lagi di kalender opname.
+          </span>
+        }
+        confirmText="Hapus Jadwal"
+        cancelText="Batal"
+      />
+
+      <ConfirmDialog
+        isOpen={showConfirmSaveDraft}
+        onClose={() => setShowConfirmSaveDraft(false)}
+        onConfirm={async () => {
+          await handleSaveDraft();
+          setShowConfirmSaveDraft(false);
+        }}
+        type="primary"
+        title="Simpan Sebagai Draf?"
+        description="Sesi opname ini akan disimpan sebagai draf sementara. Stok inventaris belum akan disesuaikan sampai Anda memfinalisasinya."
+        confirmText="Simpan Draf"
+        cancelText="Batal"
+      />
+
+      <ConfirmDialog
+        isOpen={showConfirmFinalize}
+        onClose={() => setShowConfirmFinalize(false)}
+        onConfirm={async () => {
+          await handleFinalize();
+          setShowConfirmFinalize(false);
+        }}
+        type="warning"
+        title="Finalisasi & Sesuaikan Stok Inventaris?"
+        description="Stok sistem seluruh produk yang diaudit akan langsung disesuaikan dengan angka hitungan fisik riil. Tindakan ini juga akan mencatat riwayat selisih HPP pada buku inventaris."
+        confirmText="Ya, Sesuaikan Stok Sekarang"
+        cancelText="Periksa Lagi"
+      />
     </div>
   );
-}
+});

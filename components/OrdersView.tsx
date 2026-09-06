@@ -6,6 +6,7 @@ import { Order, DateFilterType, DateRange, SalesChannel } from '@/types';
 import { formatRupiah, formatDate, formatTime, isDateInFilter } from '@/lib/utils';
 import { SalesChannelBadge } from '@/components/SalesChannelBadge';
 import { DateRangeDropdown } from '@/components/DateRangeDropdown';
+import { TablePagination } from '@/components/TablePagination';
 import {
   Search,
   Calendar,
@@ -16,6 +17,8 @@ import {
   X,
   RotateCcw,
   Globe,
+  Plus,
+  Building2,
 } from 'lucide-react';
 
 interface OrdersViewProps {
@@ -27,6 +30,12 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
   const {
     orders,
     cancelOrder,
+    resetToDemoData,
+    setIsCreateOrderModalOpen,
+    hasPermission,
+    activeBranchId,
+    activeBranch,
+    branches,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,9 +49,9 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
   const [activeOrderDetail, setActiveOrderDetail] = useState<Order | null>(selectedOrderForModal || null);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
 
-  // Pagination state
+  // Pagination state (Standard 20 rows per page)
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const itemsPerPage = 20;
 
   // Filtered orders
   const filteredOrders = useMemo(() => {
@@ -64,10 +73,15 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
             ? true
             : isDateInFilter(o.createdAt, dateFilter as DateFilterType, customRange);
 
-        return matchSearch && matchChannel && matchDate;
+        const matchBranch =
+          activeBranchId === 'all'
+            ? true
+            : o.branchId === activeBranchId;
+
+        return matchSearch && matchChannel && matchDate && matchBranch;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [orders, searchQuery, channelFilter, dateFilter, customRange]);
+  }, [orders, searchQuery, channelFilter, dateFilter, customRange, activeBranchId]);
 
   // Paginated orders
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
@@ -144,6 +158,18 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
             onCustomRangeChange={setCustomRange}
             includeAllOption={true}
           />
+
+          {/* Quick dummy data reload button */}
+          <button
+            type="button"
+            id="btn-seed-orders-dummy"
+            onClick={() => resetToDemoData()}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 text-xs font-medium transition-colors cursor-pointer"
+            title="Muat ulang 36+ pesanan contoh dari berbagai saluran (Shopee, Tokopedia, TikTok, GrabFood, Offline)"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-teal-600" />
+            <span className="hidden sm:inline">Muat Data Dummy (36+ Order)</span>
+          </button>
         </div>
       </div>
 
@@ -153,12 +179,11 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[11px] font-semibold border-b border-slate-200">
               <tr>
-                <th className="py-3.5 px-6">Order ID</th>
-                <th className="py-3.5 px-6">Saluran</th>
+                <th className="py-3.5 px-6">Order ID & Saluran</th>
+                <th className="py-3.5 px-6">Cabang</th>
                 <th className="py-3.5 px-6">Waktu</th>
                 <th className="py-3.5 px-6">Item Terjual</th>
-                <th className="py-3.5 px-6">Pembayaran</th>
-                <th className="py-3.5 px-6 text-right">Total</th>
+                <th className="py-3.5 px-6 text-right">Total & Pembayaran</th>
                 <th className="py-3.5 px-6 text-center">Status</th>
                 <th className="py-3.5 px-6 text-right">Aksi</th>
               </tr>
@@ -166,29 +191,58 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
             <tbody className="divide-y divide-slate-100">
               {paginatedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
-                    Tidak ada transaksi ditemukan pada filter ini.
+                  <td colSpan={7} className="py-14 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center space-y-3 max-w-sm mx-auto">
+                      <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center border border-teal-200/60">
+                        <Receipt className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-slate-700 font-semibold text-sm">
+                          {orders.length === 0 ? 'Belum Ada Transaksi Pesanan' : 'Tidak Ada Transaksi Ditemukan'}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {orders.length === 0
+                            ? 'Muat data pesanan contoh untuk menguji filter waktu 30 hari, pencarian, saluran penjualan, dan rincian transaksi.'
+                            : 'Coba sesuaikan filter saluran atau ubah rentang tanggal dropdown ke rentang yang lebih luas.'}
+                        </p>
+                      </div>
+                      {orders.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => resetToDemoData()}
+                          className="mt-2 inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-medium text-xs shadow-xs transition-colors cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Muat 36+ Data Pesanan Dummy</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
                 paginatedOrders.map((ord) => (
                   <tr key={ord.id} className="hover:bg-slate-50/50 transition-colors">
-                    {/* Order ID & External Ref */}
+                    {/* Order ID & Sales Channel */}
                     <td className="py-3.5 px-6">
                       <div className="font-mono font-semibold text-slate-800">{ord.id}</div>
-                      {ord.externalOrderId && (
-                        <div className="text-[10px] text-teal-700 font-sans font-medium flex items-center gap-1 mt-0.5">
-                          <span className="text-slate-400">Ref:</span>
-                          <span className="font-mono bg-teal-50 px-1 py-0.5 rounded border border-teal-200">
-                            {ord.externalOrderId}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        <SalesChannelBadge channel={ord.salesChannel || 'Offline / Kasir'} size="sm" />
+                        {ord.externalOrderId && (
+                          <span className="text-[11px] font-mono text-slate-500">
+                            #{ord.externalOrderId}
                           </span>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </td>
 
-                    {/* Sales Channel */}
+                    {/* Branch Name */}
                     <td className="py-3.5 px-6">
-                      <SalesChannelBadge channel={ord.salesChannel || 'Offline / Kasir'} size="sm" />
+                      <div className="flex items-center space-x-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="font-medium text-slate-700">
+                          {ord.branchName || branches.find((b) => b.id === ord.branchId)?.name || 'Cabang Pusat'}
+                        </span>
+                      </div>
                     </td>
 
                     {/* Date / Time */}
@@ -205,16 +259,14 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
                       </span>
                     </td>
 
-                    {/* Payment Method */}
-                    <td className="py-3.5 px-6">
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                    {/* Total & Payment Method */}
+                    <td className="py-3.5 px-6 text-right">
+                      <div className="font-bold text-slate-900 text-sm">
+                        {formatRupiah(ord.total)}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium mt-0.5">
                         {ord.paymentMethod}
-                      </span>
-                    </td>
-
-                    {/* Total */}
-                    <td className="py-3.5 px-6 text-right font-bold text-slate-900 text-sm">
-                      {formatRupiah(ord.total)}
+                      </div>
                     </td>
 
                     {/* Status */}
@@ -247,36 +299,14 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
           </table>
         </div>
 
-        {/* Pagination Bar */}
-        {totalPages > 1 && (
-          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
-            <span className="text-slate-500">
-              Menampilkan {(currentPage - 1) * itemsPerPage + 1} -{' '}
-              {Math.min(currentPage * itemsPerPage, filteredOrders.length)} dari{' '}
-              {filteredOrders.length} transaksi
-            </span>
-
-            <div className="flex items-center space-x-1.5">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shadow-xs"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="px-2 font-semibold text-slate-700">
-                Hal {currentPage} / {totalPages}
-              </span>
-              <button
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shadow-xs"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Standard 20-row Pagination Bar */}
+        <TablePagination
+          currentPage={currentPage}
+          totalItems={filteredOrders.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          itemName="transaksi pesanan"
+        />
       </div>
 
       {/* ORDER DETAIL MODAL */}
@@ -325,9 +355,20 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
                 </span>
               </div>
 
-              {/* Sales Channel & External ID Info */}
+              {/* Sales Channel, Branch & External ID Info */}
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Cabang Toko:</span>
+                  <div className="flex items-center space-x-1.5 font-semibold text-slate-800">
+                    <Building2 className="w-3.5 h-3.5 text-teal-600" />
+                    <span>
+                      {activeOrderDetail.branchName ||
+                        branches.find((b) => b.id === activeOrderDetail.branchId)?.name ||
+                        'Cabang Pusat'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200">
                   <span className="text-slate-500 font-medium">Saluran Penjualan:</span>
                   <SalesChannelBadge channel={activeOrderDetail.salesChannel || 'Offline / Kasir'} size="sm" />
                 </div>

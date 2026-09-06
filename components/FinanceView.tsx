@@ -2,10 +2,11 @@
 
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
-import { DateFilterType, DateRange, CostCategory } from '@/types';
+import { DateFilterType, DateRange, CostCategory, Branch } from '@/types';
 import { formatRupiah, formatDate, isDateInFilter } from '@/lib/utils';
 import { SalesChannelBadge } from '@/components/SalesChannelBadge';
 import { DateRangeDropdown } from '@/components/DateRangeDropdown';
+import { TablePagination } from '@/components/TablePagination';
 import {
   TrendingUp,
   ArrowUpRight,
@@ -13,6 +14,8 @@ import {
   Plus,
   Calendar,
   X,
+  RotateCcw,
+  Building2,
 } from 'lucide-react';
 
 export function FinanceView() {
@@ -22,6 +25,12 @@ export function FinanceView() {
     orders,
     addRevenue,
     addCost,
+    resetToDemoData,
+    branches,
+    activeBranchId,
+    activeBranch,
+    accessibleBranches,
+    canSwitchToAllBranches,
   } = useApp();
 
   // Date filter state - default to 30 days
@@ -31,6 +40,11 @@ export function FinanceView() {
     endDate: new Date().toISOString().slice(0, 10),
   }));
 
+  // Pagination state (Standard 20 rows per page)
+  const [revenuePage, setRevenuePage] = useState(1);
+  const [costPage, setCostPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
   // Active view tab in Finance: 'overview' | 'revenues' | 'costs'
   const [activeFinanceTab, setActiveFinanceTab] = useState<'overview' | 'revenues' | 'costs'>('overview');
 
@@ -38,18 +52,26 @@ export function FinanceView() {
   const [isAddRevenueOpen, setIsAddRevenueOpen] = useState(false);
   const [isAddCostOpen, setIsAddCostOpen] = useState(false);
 
-  // Filtered revenues & costs
+  // Filtered revenues & costs (filtered by Date AND Active Branch)
   const filteredRevenues = useMemo(() => {
     return revenues
-      .filter((r) => isDateInFilter(r.date, dateFilter, customRange))
+      .filter((r) => {
+        const matchDate = isDateInFilter(r.date, dateFilter, customRange);
+        const matchBranch = activeBranchId === 'all' || r.branchId === activeBranchId;
+        return matchDate && matchBranch;
+      })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [revenues, dateFilter, customRange]);
+  }, [revenues, dateFilter, customRange, activeBranchId]);
 
   const filteredCosts = useMemo(() => {
     return costs
-      .filter((c) => isDateInFilter(c.date, dateFilter, customRange))
+      .filter((c) => {
+        const matchDate = isDateInFilter(c.date, dateFilter, customRange);
+        const matchBranch = activeBranchId === 'all' || c.branchId === activeBranchId;
+        return matchDate && matchBranch;
+      })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [costs, dateFilter, customRange]);
+  }, [costs, dateFilter, customRange, activeBranchId]);
 
   // Totals
   const totalRevenue = useMemo(() => {
@@ -62,32 +84,52 @@ export function FinanceView() {
 
   const estimatedProfit = totalRevenue - totalCost;
 
+  // Paged items (Standard max 20 rows per page)
+  const pagedRevenues = useMemo(() => {
+    const start = (revenuePage - 1) * ITEMS_PER_PAGE;
+    return filteredRevenues.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredRevenues, revenuePage]);
+
+  const pagedCosts = useMemo(() => {
+    const start = (costPage - 1) * ITEMS_PER_PAGE;
+    return filteredCosts.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredCosts, costPage]);
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Top Banner with Date Filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-        <div className="flex items-center space-x-3.5">
-          <div className="w-11 h-11 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center">
-            <TrendingUp className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-slate-900">Keuangan & Laba Bersih</h2>
-            <p className="text-xs text-slate-500">
-              Arus kas masuk (penjualan), kas keluar (restock/operasional), dan laba warung
-            </p>
-          </div>
-        </div>
+      {/* Date Filter & Quick Actions (Container removed, moved to left) */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center flex-wrap gap-2">
+          {/* Date Range Dropdown moved to left */}
+          <DateRangeDropdown
+            value={dateFilter}
+            onChange={(val) => {
+              setDateFilter(val as DateFilterType);
+              setRevenuePage(1);
+              setCostPage(1);
+            }}
+            customRange={customRange}
+            onCustomRangeChange={(range) => {
+              setCustomRange(range);
+              setRevenuePage(1);
+              setCostPage(1);
+            }}
+          />
 
-        {/* Date Range Dropdown */}
-        <DateRangeDropdown
-          value={dateFilter}
-          onChange={(val) => setDateFilter(val as DateFilterType)}
-          customRange={customRange}
-          onCustomRangeChange={setCustomRange}
-        />
+          {/* Quick dummy data reload button */}
+          <button
+            type="button"
+            id="btn-seed-finance-dummy"
+            onClick={() => resetToDemoData()}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer shadow-xs"
+            title="Muat ulang data dummy keuangan & transaksi 30 hari (36+ order, 10 restock, 10 biaya operasional)"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-teal-600" />
+            <span className="hidden sm:inline">Muat Data Dummy Keuangan</span>
+          </button>
+        </div>
       </div>
 
-      {/* FINANCE SUMMARY CARDS (REVENUE, COST, ESTIMATED PROFIT) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Total Revenue */}
         <div className="p-6 bg-white border border-slate-200 rounded-2xl space-y-2 shadow-xs">
@@ -217,6 +259,7 @@ export function FinanceView() {
                 <tr>
                   <th className="py-3 px-4">Tanggal</th>
                   <th className="py-3 px-4">Deskripsi</th>
+                  <th className="py-3 px-4">Cabang</th>
                   <th className="py-3 px-4">Saluran Penjualan</th>
                   <th className="py-3 px-4">Sumber</th>
                   <th className="py-3 px-4 text-right">Jumlah</th>
@@ -225,12 +268,12 @@ export function FinanceView() {
               <tbody className="divide-y divide-slate-100">
                 {filteredRevenues.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                    <td colSpan={6} className="py-8 text-center text-slate-400">
                       Belum ada pemasukan tercatat pada periode ini.
                     </td>
                   </tr>
                 ) : (
-                  filteredRevenues.map((rev) => {
+                  pagedRevenues.map((rev) => {
                     const relatedOrder = rev.orderId ? orders.find((o) => o.id === rev.orderId) : null;
                     return (
                       <tr key={rev.id} className="hover:bg-slate-50/50 transition-colors">
@@ -242,6 +285,12 @@ export function FinanceView() {
                               Ref: {relatedOrder.externalOrderId}
                             </div>
                           )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center space-x-1 font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                            <Building2 className="w-3 h-3 text-slate-400" />
+                            <span>{rev.branchName || branches.find((b) => b.id === rev.branchId)?.name || 'Cabang Pusat'}</span>
+                          </span>
                         </td>
                         <td className="py-3 px-4">
                           {rev.source === 'Order' ? (
@@ -271,6 +320,16 @@ export function FinanceView() {
               </tbody>
             </table>
           </div>
+
+          {/* Standard 20-row Pagination */}
+          <TablePagination
+            currentPage={revenuePage}
+            totalItems={filteredRevenues.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={setRevenuePage}
+            itemName="transaksi pemasukan"
+            className="-mx-6 -mb-6 rounded-b-2xl"
+          />
         </div>
       )}
 
@@ -295,6 +354,7 @@ export function FinanceView() {
                 <tr>
                   <th className="py-3 px-4">Tanggal</th>
                   <th className="py-3 px-4">Deskripsi</th>
+                  <th className="py-3 px-4">Cabang</th>
                   <th className="py-3 px-4">Kategori</th>
                   <th className="py-3 px-4">Sumber</th>
                   <th className="py-3 px-4 text-right">Jumlah</th>
@@ -303,15 +363,21 @@ export function FinanceView() {
               <tbody className="divide-y divide-slate-100">
                 {filteredCosts.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                    <td colSpan={6} className="py-8 text-center text-slate-400">
                       Belum ada biaya pengeluaran tercatat pada periode ini.
                     </td>
                   </tr>
                 ) : (
-                  filteredCosts.map((cost) => (
+                  pagedCosts.map((cost) => (
                     <tr key={cost.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="py-3 px-4 text-slate-500">{formatDate(cost.date, true)}</td>
                       <td className="py-3 px-4 font-semibold text-slate-800">{cost.description}</td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center space-x-1 font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                          <Building2 className="w-3 h-3 text-slate-400" />
+                          <span>{cost.branchName || branches.find((b) => b.id === cost.branchId)?.name || 'Cabang Pusat'}</span>
+                        </span>
+                      </td>
                       <td className="py-3 px-4">
                         <span className="px-2.5 py-0.5 rounded-lg bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-700">
                           {cost.category}
@@ -337,15 +403,29 @@ export function FinanceView() {
               </tbody>
             </table>
           </div>
+
+          {/* Standard 20-row Pagination */}
+          <TablePagination
+            currentPage={costPage}
+            totalItems={filteredCosts.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={setCostPage}
+            itemName="pos biaya"
+            className="-mx-6 -mb-6 rounded-b-2xl"
+          />
         </div>
       )}
 
       {/* MODAL: ADD MANUAL REVENUE */}
       {isAddRevenueOpen && (
         <AddRevenueModal
+          branches={branches}
+          activeBranchId={activeBranchId}
+          accessibleBranches={accessibleBranches}
+          canSwitchToAllBranches={canSwitchToAllBranches}
           onClose={() => setIsAddRevenueOpen(false)}
-          onSave={async (amount, desc, date, notes) => {
-            await addRevenue(amount, desc, date, notes);
+          onSave={async (amount, desc, date, notes, branchId) => {
+            await addRevenue(amount, desc, date, notes, branchId);
             setIsAddRevenueOpen(false);
           }}
         />
@@ -354,9 +434,13 @@ export function FinanceView() {
       {/* MODAL: ADD MANUAL COST */}
       {isAddCostOpen && (
         <AddCostModal
+          branches={branches}
+          activeBranchId={activeBranchId}
+          accessibleBranches={accessibleBranches}
+          canSwitchToAllBranches={canSwitchToAllBranches}
           onClose={() => setIsAddCostOpen(false)}
-          onSave={async (amount, cat, desc, date, notes) => {
-            await addCost(amount, cat, desc, date, notes);
+          onSave={async (amount, cat, desc, date, notes, branchId) => {
+            await addCost(amount, cat, desc, date, notes, branchId);
             setIsAddCostOpen(false);
           }}
         />
@@ -369,12 +453,27 @@ export function FinanceView() {
 // ADD MANUAL REVENUE MODAL
 // ----------------------------------------------------
 function AddRevenueModal({
+  branches,
+  activeBranchId,
+  accessibleBranches,
+  canSwitchToAllBranches,
   onClose,
   onSave,
 }: {
+  branches: Branch[];
+  activeBranchId: string;
+  accessibleBranches: Branch[];
+  canSwitchToAllBranches: boolean;
   onClose: () => void;
-  onSave: (amount: number, desc: string, date: string, notes?: string) => void;
+  onSave: (amount: number, desc: string, date: string, notes?: string, branchId?: string) => void;
 }) {
+  const defaultBranchId = activeBranchId !== 'all'
+    ? activeBranchId
+    : (accessibleBranches.find((b) => b.status === 'Active')?.id || accessibleBranches[0]?.id || branches[0]?.id || 'branch-1');
+
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(defaultBranchId);
+  const selectedBranch = branches.find((b) => b.id === selectedBranchId) || branches[0];
+
   const [amount, setAmount] = useState<number | ''>('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -383,7 +482,7 @@ function AddRevenueModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (amount === '' || amount <= 0 || !description.trim()) return;
-    onSave(Number(amount), description.trim(), date, notes.trim());
+    onSave(Number(amount), description.trim(), date, notes.trim(), selectedBranchId);
   };
 
   return (
@@ -397,6 +496,31 @@ function AddRevenueModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+          {/* Branch Selection */}
+          <div>
+            <label className="block text-slate-600 font-medium mb-1">
+              Cabang <span className="text-teal-600">*</span>
+            </label>
+            {canSwitchToAllBranches ? (
+              <select
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+              >
+                {accessibleBranches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.code}){b.status === 'Inactive' ? ' - Nonaktif' : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="flex items-center space-x-2 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800">
+                <Building2 className="w-4 h-4 text-teal-600" />
+                <span>{selectedBranch?.name} ({selectedBranch?.code})</span>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-slate-600 font-medium mb-1">
               Jumlah Pemasukan (Rp) <span className="text-teal-600">*</span>
@@ -473,12 +597,27 @@ function AddRevenueModal({
 // ADD MANUAL COST MODAL
 // ----------------------------------------------------
 function AddCostModal({
+  branches,
+  activeBranchId,
+  accessibleBranches,
+  canSwitchToAllBranches,
   onClose,
   onSave,
 }: {
+  branches: Branch[];
+  activeBranchId: string;
+  accessibleBranches: Branch[];
+  canSwitchToAllBranches: boolean;
   onClose: () => void;
-  onSave: (amount: number, cat: CostCategory, desc: string, date: string, notes?: string) => void;
+  onSave: (amount: number, cat: CostCategory, desc: string, date: string, notes?: string, branchId?: string) => void;
 }) {
+  const defaultBranchId = activeBranchId !== 'all'
+    ? activeBranchId
+    : (accessibleBranches.find((b) => b.status === 'Active')?.id || accessibleBranches[0]?.id || branches[0]?.id || 'branch-1');
+
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(defaultBranchId);
+  const selectedBranch = branches.find((b) => b.id === selectedBranchId) || branches[0];
+
   const [amount, setAmount] = useState<number | ''>('');
   const [category, setCategory] = useState<CostCategory>('Electricity');
   const [description, setDescription] = useState('');
@@ -488,7 +627,7 @@ function AddCostModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (amount === '' || amount <= 0 || !description.trim()) return;
-    onSave(Number(amount), category, description.trim(), date, notes.trim());
+    onSave(Number(amount), category, description.trim(), date, notes.trim(), selectedBranchId);
   };
 
   return (
@@ -502,6 +641,31 @@ function AddCostModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+          {/* Branch Selection */}
+          <div>
+            <label className="block text-slate-600 font-medium mb-1">
+              Cabang <span className="text-teal-600">*</span>
+            </label>
+            {canSwitchToAllBranches ? (
+              <select
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+              >
+                {accessibleBranches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.code}){b.status === 'Inactive' ? ' - Nonaktif' : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="flex items-center space-x-2 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800">
+                <Building2 className="w-4 h-4 text-teal-600" />
+                <span>{selectedBranch?.name} ({selectedBranch?.code})</span>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-slate-600 font-medium mb-1">
               Jumlah Pengeluaran (Rp) <span className="text-teal-600">*</span>

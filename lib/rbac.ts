@@ -27,6 +27,12 @@ export const APP_MODULES: ModuleMetadata[] = [
     iconName: 'Package',
   },
   {
+    key: 'inventory',
+    name: 'Inventaris & Gudang',
+    description: 'Audit stok fisik (stock opname), penataan rak barang, dan pemantauan stok',
+    iconName: 'Boxes',
+  },
+  {
     key: 'categories',
     name: 'Kategori Produk',
     description: 'Pengelompokan barang dan manajemen kategori produk',
@@ -55,6 +61,12 @@ export const APP_MODULES: ModuleMetadata[] = [
     name: 'Keuangan & Laba Rugi',
     description: 'Laporan laba rugi, pencatatan biaya operasional, dan arus kas',
     iconName: 'TrendingUp',
+  },
+  {
+    key: 'branches',
+    name: 'Manajemen Cabang',
+    description: 'Manajemen cabang toko fisik, kode cabang, dan status aktivasi',
+    iconName: 'Store',
   },
   {
     key: 'perangkat_kasir',
@@ -86,11 +98,13 @@ export const MODULE_LABELS: Record<AppModule, string> = {
   dashboard: 'Dashboard',
   orders: 'Pesanan (Kasir)',
   products: 'Produk & Stok',
+  inventory: 'Inventaris & Gudang',
   categories: 'Kategori',
   racks: 'Rak & Lokasi',
   stock_opname: 'Stock Opname',
   restock: 'Restock Barang',
   finance: 'Keuangan & Laba Rugi',
+  branches: 'Cabang Toko',
   perangkat_kasir: 'Perangkat Kasir',
   integrasi_channel: 'Integrasi Channel',
   users: 'User Management',
@@ -101,11 +115,13 @@ export const MODULE_DESCRIPTIONS: Record<AppModule, string> = {
   dashboard: 'Ringkasan penjualan, grafik performa, dan stok kritis',
   orders: 'Kasir POS, input pesanan belanja, dan cetak invoice',
   products: 'Katalog barang, harga jual, HPP, scan barcode',
+  inventory: 'Audit stok fisik, tata letak rak, dan rekonsiliasi persediaan',
   categories: 'Manajemen master kategori barang',
   racks: 'Manajemen master rak dan kode penempatan barang',
   stock_opname: 'Audit stok fisik, rekonsiliasi selisih, dan jadwal audit berkala',
   restock: 'Catat restock & hitung HPP rata-rata terbobot',
   finance: 'Pencatatan laba bersih, beban operasional, dan laporan',
+  branches: 'Manajemen multi-cabang fisik, aktivasi, dan alamat toko',
   perangkat_kasir: 'Konfigurasi printer thermal, laci kasir (drawer), dan scanner barcode',
   integrasi_channel: 'Manajemen koneksi penjualan omnichannel resmi, pemetaan produk & sinkronisasi inventori terpusat',
   users: 'Kelola data pengguna, role, dan pembatasan modul',
@@ -116,11 +132,13 @@ export const FULL_PERMISSIONS: Record<AppModule, ModulePermission> = {
   dashboard: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   orders: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   products: { canView: true, canCreate: true, canEdit: true, canDelete: true },
+  inventory: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   categories: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   racks: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   stock_opname: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   restock: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   finance: { canView: true, canCreate: true, canEdit: true, canDelete: true },
+  branches: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   perangkat_kasir: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   integrasi_channel: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   users: { canView: true, canCreate: true, canEdit: true, canDelete: true },
@@ -131,11 +149,13 @@ export const NO_PERMISSIONS: Record<AppModule, ModulePermission> = {
   dashboard: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   orders: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   products: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+  inventory: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   categories: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   racks: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   stock_opname: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   restock: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   finance: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+  branches: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   perangkat_kasir: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
@@ -161,11 +181,13 @@ export const DEFAULT_ROLES: AppRole[] = [
       dashboard: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       orders: { canView: true, canCreate: true, canEdit: true, canDelete: false },
       products: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      inventory: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       categories: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       racks: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       stock_opname: { canView: true, canCreate: true, canEdit: true, canDelete: false },
       restock: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       finance: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      branches: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       perangkat_kasir: { canView: true, canCreate: true, canEdit: true, canDelete: false },
       integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
@@ -183,11 +205,13 @@ export const DEFAULT_ROLES: AppRole[] = [
       dashboard: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       orders: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       products: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      inventory: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       categories: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       racks: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       stock_opname: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       restock: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       finance: { canView: true, canCreate: true, canEdit: true, canDelete: true },
+      branches: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       perangkat_kasir: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
@@ -205,11 +229,13 @@ export const DEFAULT_ROLES: AppRole[] = [
       dashboard: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       orders: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       products: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      inventory: { canView: true, canCreate: true, canEdit: true, canDelete: true },
       categories: { canView: true, canCreate: true, canEdit: true, canDelete: false },
       racks: { canView: true, canCreate: true, canEdit: true, canDelete: true },
       stock_opname: { canView: true, canCreate: true, canEdit: true, canDelete: true },
       restock: { canView: true, canCreate: true, canEdit: true, canDelete: false },
       finance: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      branches: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       perangkat_kasir: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
@@ -229,6 +255,7 @@ export const STAGING_INITIAL_USERS: AppUser[] = [
     email: 'staging@example.com',
     phone: '081234567890',
     roleId: 'role-owner-admin',
+    branchAccess: ['*'],
     status: 'active',
     createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
     onboardingCompleted: true,
@@ -241,6 +268,7 @@ export const STAGING_INITIAL_USERS: AppUser[] = [
     email: 'kasir_siti@warung.internal',
     phone: '081298765432',
     roleId: 'role-kasir',
+    branchAccess: ['branch-1'],
     status: 'active',
     createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
     onboardingCompleted: true,
@@ -253,6 +281,7 @@ export const STAGING_INITIAL_USERS: AppUser[] = [
     email: 'akuntan_budi@warung.internal',
     phone: '085712345678',
     roleId: 'role-finance',
+    branchAccess: ['*'],
     status: 'active',
     createdAt: new Date(Date.now() - 10 * 86400000).toISOString(),
     onboardingCompleted: true,
@@ -265,6 +294,7 @@ export const STAGING_INITIAL_USERS: AppUser[] = [
     email: 'gudang_agus@warung.internal',
     phone: '087811223344',
     roleId: 'role-gudang',
+    branchAccess: ['branch-1', 'branch-2'],
     status: 'active',
     createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
     onboardingCompleted: true,
@@ -542,5 +572,28 @@ export function formatCredentialsText(params: {
     lines.push(`Password: ${params.password}`);
   }
   return lines.join('\n');
+}
+
+// Branch access helpers
+export function canAccessAllBranches(
+  user?: { roleId?: string; branchAccess?: string[] } | null,
+  role?: AppRole | null
+): boolean {
+  if (!user) return true;
+  if (user.roleId === 'role-owner-admin' || role?.id === 'role-owner-admin') return true;
+  if (!user.branchAccess || user.branchAccess.length === 0) return true;
+  return user.branchAccess.includes('*');
+}
+
+export function hasBranchAccess(
+  user?: { roleId?: string; branchAccess?: string[] } | null,
+  branchId?: string | null,
+  role?: AppRole | null
+): boolean {
+  if (!branchId || branchId === 'all') return canAccessAllBranches(user, role);
+  if (!user) return true;
+  if (user.roleId === 'role-owner-admin' || role?.id === 'role-owner-admin') return true;
+  if (!user.branchAccess || user.branchAccess.length === 0) return true;
+  return user.branchAccess.includes('*') || user.branchAccess.includes(branchId);
 }
 

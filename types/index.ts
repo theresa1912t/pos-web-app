@@ -21,6 +21,29 @@ export type CostCategory =
   | 'Equipment'
   | 'Other';
 
+export type BranchStatus = 'Active' | 'Inactive';
+
+export interface Branch {
+  id: string;
+  business_id?: string;
+  userId?: string;
+  name: string;
+  code: string;
+  address: string;
+  phone: string;
+  status: BranchStatus;
+  createdAt: string;
+}
+
+export interface ProductInventory {
+  id: string;
+  productId: string;
+  branchId: string;
+  stock: number;
+  rackId?: string;
+  rackName?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -36,6 +59,7 @@ export interface Product {
   image?: string;
   minStockThreshold?: number; // default: 5
   isArchived?: boolean;
+  inventories?: ProductInventory[];
 }
 
 export interface Category {
@@ -45,6 +69,8 @@ export interface Category {
 
 export interface Rack {
   id: string;
+  branchId?: string;
+  branchName?: string;
   name: string;
   code: string; // e.g. "RAK-A1", "ETL-01"
   locationDescription?: string; // e.g. "Depan Kasir Baris 1", "Etalase Minuman Dingin"
@@ -74,6 +100,8 @@ export interface StockOpnameItem {
 export interface StockOpname {
   id: string;
   opnameNumber: string; // e.g. "SO-20260828-001"
+  branchId?: string;
+  branchName?: string;
   scope: StockOpnameScope;
   scopeTargetId?: string;
   scopeTargetName?: string;
@@ -92,6 +120,8 @@ export interface StockOpname {
 
 export interface StockOpnameSchedule {
   id: string;
+  branchId?: string;
+  branchName?: string;
   title: string;
   scope: StockOpnameScope;
   scopeTargetId?: string;
@@ -105,6 +135,8 @@ export interface StockOpnameSchedule {
 
 export interface RestockRecord {
   id: string;
+  branchId?: string;
+  branchName?: string;
   productId: string;
   productName: string;
   quantity: number;
@@ -129,6 +161,8 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  branchId?: string;
+  branchName?: string;
   items: OrderItem[];
   total: number;
   totalCogs: number;
@@ -145,6 +179,8 @@ export interface Order {
 
 export interface Revenue {
   id: string;
+  branchId?: string;
+  branchName?: string;
   amount: number;
   source: 'Order' | 'Manual';
   salesChannel?: SalesChannel;
@@ -156,6 +192,8 @@ export interface Revenue {
 
 export interface Cost {
   id: string;
+  branchId?: string;
+  branchName?: string;
   amount: number;
   category: CostCategory;
   source: 'Restock' | 'Manual';
@@ -232,17 +270,22 @@ export interface BusinessSettings {
   cashDrawerInterface?: 'printer_kick' | 'serial_usb' | 'local_bridge' | 'simulated';
   barcodeScannerName?: string;
   barcodeScannerConnected?: boolean;
+  language?: AppLanguage;
 }
+
+export type AppLanguage = 'id' | 'en';
 
 export type AppModule =
   | 'dashboard'
   | 'orders'
   | 'products'
+  | 'inventory'
   | 'categories'
   | 'racks'
   | 'stock_opname'
   | 'restock'
   | 'finance'
+  | 'branches'
   | 'perangkat_kasir'
   | 'integrasi_channel'
   | 'users'
@@ -285,6 +328,7 @@ export interface AppUser {
   email: string;
   phone?: string;
   roleId: string;
+  branchAccess?: string[]; // e.g. ['*'] for all branches, or ['branch-1', 'branch-2']
   status: UserStatus;
   createdAt: string;
   updatedAt?: string;
@@ -298,6 +342,7 @@ export interface User {
   email: string;
   phone?: string;
   roleId?: string;
+  branchAccess?: string[];
   status?: UserStatus;
   onboardingCompleted?: boolean;
 }
@@ -331,3 +376,17 @@ export interface DateRange {
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
 }
+
+export type TabType =
+  | 'dashboard'
+  | 'orders'
+  | 'products'
+  | 'inventory'
+  | 'finance'
+  | 'branches'
+  | 'perangkat_kasir'
+  | 'stock_opname'
+  | 'integrasi_channel'
+  | 'users'
+  | 'settings';
+

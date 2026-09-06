@@ -25,6 +25,7 @@ import {
   PackagePlus,
   Vault,
   Sparkles,
+  Building2,
 } from 'lucide-react';
 
 interface CreateOrderModalProps {
@@ -33,7 +34,32 @@ interface CreateOrderModalProps {
 }
 
 export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
-  const { products, categories, createOrder, createProduct, seedInitialData, settings, setIsCreateOrderModalOpen } = useApp();
+  const {
+    products,
+    categories,
+    createOrder,
+    createProduct,
+    seedInitialData,
+    settings,
+    setIsCreateOrderModalOpen,
+    branches,
+    activeBranchId,
+    getProductStockInBranch,
+    canSwitchToAllBranches,
+    accessibleBranches,
+  } = useApp();
+
+  const defaultBranchId = useMemo(() => {
+    if (activeBranchId !== 'all') return activeBranchId;
+    const activeAccessible = accessibleBranches.find((b) => b.status === 'Active');
+    return activeAccessible?.id || accessibleBranches[0]?.id || branches[0]?.id || 'branch-1';
+  }, [activeBranchId, accessibleBranches, branches]);
+
+  const [orderBranchId, setOrderBranchId] = useState<string>(defaultBranchId);
+
+  const currentBranch = useMemo(() => {
+    return branches.find((b) => b.id === orderBranchId) || branches[0];
+  }, [branches, orderBranchId]);
 
   const [step, setStep] = useState<1 | 2 | 3 | 'success'>(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,6 +105,11 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
     return products.filter((p) => !p.isArchived);
   }, [products]);
 
+  // Helper to get stock for a product in the selected branch
+  const getBranchStock = (productId: string) => {
+    return getProductStockInBranch(productId, orderBranchId);
+  };
+
   // Filter products by search, category, and barcode
   const filteredProducts = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -111,21 +142,22 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
     }, 3000);
   };
 
-  // Cart Actions
+  // Cart Actions (checked against branch stock)
   const addToCart = (product: Product) => {
+    const currentStock = getBranchStock(product.id);
     setCart((prev) => {
       const existing = prev.find((it) => it.product.id === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock) {
-          showToast(`Stok ${product.name} telah mencapai batas (${product.stock} ${product.unit})`, 'warning');
+        if (existing.quantity >= currentStock) {
+          showToast(`Stok ${product.name} di ${currentBranch?.name || 'cabang ini'} telah mencapai batas (${currentStock} ${product.unit})`, 'warning');
           return prev;
         }
         return prev.map((it) =>
           it.product.id === product.id ? { ...it, quantity: it.quantity + 1 } : it
         );
       }
-      if (product.stock <= 0) {
-        showToast(`Stok ${product.name} habis`, 'warning');
+      if (currentStock <= 0) {
+        showToast(`Stok ${product.name} di ${currentBranch?.name || 'cabang ini'} habis`, 'warning');
         return prev;
       }
       return [...prev, { product, quantity: 1 }];
@@ -137,9 +169,8 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
       removeFromCart(productId);
       return;
     }
-    const targetProduct = availableProducts.find((p) => p.id === productId);
-    const maxStock = targetProduct ? targetProduct.stock : 9999;
-    const cappedQty = Math.min(newQty, maxStock);
+    const currentStock = getBranchStock(productId);
+    const cappedQty = Math.min(newQty, currentStock);
 
     setCart((prev) =>
       prev.map((it) => (it.product.id === productId ? { ...it, quantity: cappedQty } : it))
@@ -162,8 +193,9 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
     );
 
     if (matchedProduct) {
-      if (matchedProduct.stock <= 0) {
-        showToast(`Stok "${matchedProduct.name}" habis (${matchedProduct.stock} ${matchedProduct.unit})`, 'warning');
+      const currentStock = getBranchStock(matchedProduct.id);
+      if (currentStock <= 0) {
+        showToast(`Stok "${matchedProduct.name}" di ${currentBranch?.name || 'cabang ini'} habis (${currentStock} ${matchedProduct.unit})`, 'warning');
       } else {
         addToCart(matchedProduct);
         showToast(`"${matchedProduct.name}" ditambahkan ke keranjang`, 'success');
@@ -241,7 +273,8 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
         paymentMethod === 'Cash' ? (typeof cashTendered === 'number' ? cashTendered : totalAmount) : undefined,
         paymentMethod === 'Cash' ? changeAmount : 0,
         salesChannel,
-        externalOrderId.trim() || undefined
+        externalOrderId.trim() || undefined,
+        orderBranchId
       );
 
       if (order) {
@@ -397,6 +430,42 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
               <div className="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-slate-200 overflow-hidden bg-slate-50/30">
                 {/* Search Bar, Categories & Scan Barcode Action */}
                 <div className="p-4 border-b border-slate-200 space-y-3 bg-white">
+                  {/* Branch Context Indicator */}
+                  <div className="flex items-center justify-between px-3 py-2 bg-teal-50/60 border border-teal-200/80 rounded-xl text-xs">
+                    <div className="flex items-center space-x-2">
+                      <Building2 className="w-4 h-4 text-teal-700 shrink-0" />
+                      <span className="text-slate-600 font-medium">Cabang Transaksi:</span>
+                    </div>
+
+                    {canSwitchToAllBranches ? (
+                      <div className="flex items-center space-x-2">
+                        <select
+                          value={orderBranchId}
+                          onChange={(e) => {
+                            const newBranchId = e.target.value;
+                            setOrderBranchId(newBranchId);
+                            // Clear cart on branch change because inventory availability is branch-specific
+                            if (cart.length > 0) {
+                              setCart([]);
+                              showToast('Keranjang direset karena cabang diubah', 'warning');
+                            }
+                          }}
+                          className="bg-white border border-teal-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer shadow-xs"
+                        >
+                          {accessibleBranches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name} ({b.code}){b.status === 'Inactive' ? ' - Nonaktif' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <span className="font-semibold text-teal-800 bg-white px-2.5 py-0.5 rounded-lg border border-teal-200 shadow-xs">
+                        {currentBranch?.name || 'Cabang Ditugaskan'} ({currentBranch?.code})
+                      </span>
+                    )}
+                  </div>
+
                   <div className="flex items-center gap-2">
                     {/* Search Input */}
                     <div className="relative flex-1">
@@ -515,7 +584,8 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
                   ) : (
                     filteredProducts.map((prod) => {
                       const inCart = cart.find((it) => it.product.id === prod.id);
-                      const isOutOfStock = prod.stock <= 0;
+                      const branchStock = getBranchStock(prod.id);
+                      const isOutOfStock = branchStock <= 0;
 
                       return (
                         <div
@@ -557,7 +627,7 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
                                 {formatRupiah(prod.sellingPrice)}
                               </div>
                               <div className="text-[10px] text-slate-400">
-                                Stok: {prod.stock} {prod.unit}
+                                Stok: {branchStock} {prod.unit}
                               </div>
                             </div>
                             <button
@@ -1081,7 +1151,11 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
               <div className="p-5 bg-white border border-slate-200 rounded-2xl text-xs space-y-3 font-mono shadow-sm text-slate-800">
                 <div className="text-center border-b border-slate-200 pb-3 font-sans">
                   <h4 className="font-bold text-sm text-slate-900">{settings.name}</h4>
-                  <p className="text-[10px] text-slate-500">{settings.address}</p>
+                  <div className="inline-flex items-center space-x-1 text-[11px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200 mt-1">
+                    <Building2 className="w-3 h-3 text-teal-600" />
+                    <span>{completedOrder.branchName || 'Cabang Utama'}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">{settings.address}</p>
                   <p className="text-[10px] text-slate-500">Telp: {settings.phone}</p>
                 </div>
 

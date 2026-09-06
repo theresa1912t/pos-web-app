@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   Globe,
   ExternalLink,
+  Plus,
+  Building2,
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -33,6 +35,11 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
     setRestockModalProductId,
     setIsCreateOrderModalOpen,
     setActiveTab,
+    hasPermission,
+    branches,
+    activeBranchId,
+    activeBranch,
+    getProductStockInBranch,
   } = useApp();
 
   // Date filter state - default to 30 days
@@ -49,20 +56,30 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
     endDate: new Date().toISOString().slice(0, 10),
   }));
 
-  // Filtered Orders & Revenues for main metrics
+  // Filtered Orders & Revenues for main metrics (by Date AND activeBranchId)
   const filteredOrders = useMemo(() => {
-    return orders.filter((o) =>
-      o.status === 'Finished' && isDateInFilter(o.createdAt, dateFilter, customRange)
-    );
-  }, [orders, dateFilter, customRange]);
+    return orders.filter((o) => {
+      const matchDate = isDateInFilter(o.createdAt, dateFilter, customRange);
+      const matchBranch = activeBranchId === 'all' || o.branchId === activeBranchId;
+      return o.status === 'Finished' && matchDate && matchBranch;
+    });
+  }, [orders, dateFilter, customRange, activeBranchId]);
 
   const filteredRevenues = useMemo(() => {
-    return revenues.filter((r) => isDateInFilter(r.date, dateFilter, customRange));
-  }, [revenues, dateFilter, customRange]);
+    return revenues.filter((r) => {
+      const matchDate = isDateInFilter(r.date, dateFilter, customRange);
+      const matchBranch = activeBranchId === 'all' || r.branchId === activeBranchId;
+      return matchDate && matchBranch;
+    });
+  }, [revenues, dateFilter, customRange, activeBranchId]);
 
   const filteredCosts = useMemo(() => {
-    return costs.filter((c) => isDateInFilter(c.date, dateFilter, customRange));
-  }, [costs, dateFilter, customRange]);
+    return costs.filter((c) => {
+      const matchDate = isDateInFilter(c.date, dateFilter, customRange);
+      const matchBranch = activeBranchId === 'all' || c.branchId === activeBranchId;
+      return matchDate && matchBranch;
+    });
+  }, [costs, dateFilter, customRange, activeBranchId]);
 
   // Main KPI calculations
   const totalPendapatan = useMemo(() => {
@@ -83,19 +100,27 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
     }, 0);
   }, [filteredOrders]);
 
-  // Low stock products
+  // Low stock products (branch-aware)
   const lowStockProducts = useMemo(() => {
     return products
-      .filter((p) => !p.isArchived && p.stock <= (p.minStockThreshold ?? 5))
-      .sort((a, b) => a.stock - b.stock);
-  }, [products]);
+      .map((p) => {
+        const branchStock = activeBranchId === 'all' ? p.stock : getProductStockInBranch(p.id, activeBranchId);
+        return {
+          ...p,
+          effectiveStock: branchStock,
+        };
+      })
+      .filter((p) => !p.isArchived && p.effectiveStock <= (p.minStockThreshold ?? 5))
+      .sort((a, b) => a.effectiveStock - b.effectiveStock);
+  }, [products, activeBranchId, getProductStockInBranch]);
 
-  // Recent transactions (latest 5 orders)
+  // Recent transactions (filtered by active branch)
   const recentOrders = useMemo(() => {
-    return [...orders]
+    return orders
+      .filter((o) => activeBranchId === 'all' || o.branchId === activeBranchId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 6);
-  }, [orders]);
+  }, [orders, activeBranchId]);
 
   // Channel breakdown for omnichannel insights
   const channelBreakdown = useMemo(() => {
@@ -133,7 +158,7 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
         const dayLabel = `${d.getDate()} ${d.toLocaleDateString('id-ID', { month: 'short' })}`;
 
         const dayRev = revenues
-          .filter((r) => r.date.slice(0, 10) === dateStr)
+          .filter((r) => r.date.slice(0, 10) === dateStr && (activeBranchId === 'all' || r.branchId === activeBranchId))
           .reduce((sum, r) => sum + r.amount, 0);
 
         data.push({ label: dayLabel, dateStr, amount: dayRev });
@@ -146,7 +171,7 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
         const dayLabel = `${d.getDate()} ${d.toLocaleDateString('id-ID', { month: 'short' })}`;
 
         const dayRev = revenues
-          .filter((r) => r.date.slice(0, 10) === dateStr)
+          .filter((r) => r.date.slice(0, 10) === dateStr && (activeBranchId === 'all' || r.branchId === activeBranchId))
           .reduce((sum, r) => sum + r.amount, 0);
 
         data.push({ label: dayLabel, dateStr, amount: dayRev });
@@ -154,22 +179,14 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
     }
 
     return data;
-  }, [chartPeriod, chartCustomRange, revenues]);
+  }, [chartPeriod, chartCustomRange, revenues, activeBranchId]);
 
   const maxChartAmount = Math.max(10000, ...chartData.map((d) => d.amount));
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 text-slate-900">
-      {/* Top Banner with Date Filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-        <div>
-          <h2 className="text-base font-bold text-slate-900">Ringkasan Warung</h2>
-          <p className="text-xs text-slate-500">
-            Pantau penjualan kasir, kondisi persediaan stok barang, dan arus kas harian
-          </p>
-        </div>
-
-        {/* Date Range Dropdown Selector */}
+      {/* Date Filter */}
+      <div className="flex justify-start">
         <DateRangeDropdown
           value={dateFilter}
           onChange={(val) => setDateFilter(val as DateFilterType)}
@@ -424,7 +441,7 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
       {/* 2-COLUMN SECTION: STOCK MENIPIS & PESANAN TERBARU */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* STOCK MENIPIS */}
-        <div className="p-6 bg-white border border-slate-200 rounded-2xl space-y-4 shadow-xs flex flex-col justify-between">
+        <div className="p-6 bg-white border border-slate-200 rounded-2xl space-y-4 shadow-xs">
           <div>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
               <div className="flex items-center space-x-2">
@@ -438,7 +455,7 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
                 onClick={() => setActiveTab('products')}
                 className="text-xs text-slate-500 hover:text-teal-600 font-medium flex items-center space-x-1 transition-colors cursor-pointer"
               >
-                <span>Lihat Semua</span>
+                <span>Lihat Semua Stok</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -462,7 +479,7 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
                         <span className="text-[10px] text-slate-400 font-normal">({prod.category})</span>
                       </div>
                       <div className="text-xs text-amber-600 font-medium mt-0.5">
-                        Sisa: {prod.stock} {prod.unit}{' '}
+                        Sisa: {prod.effectiveStock} {prod.unit}{' '}
                         <span className="text-[11px] text-slate-400 font-normal">
                           (Batas min: {prod.minStockThreshold ?? 5} {prod.unit})
                         </span>
@@ -481,21 +498,10 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
               )}
             </div>
           </div>
-
-          {lowStockProducts.length > 0 && (
-            <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
-              <button
-                onClick={() => setActiveTab('products')}
-                className="text-xs font-semibold text-teal-600 hover:text-teal-700 transition-colors cursor-pointer"
-              >
-                Lihat Semua Inventaris →
-              </button>
-            </div>
-          )}
         </div>
 
         {/* PESANAN TERBARU */}
-        <div className="p-6 bg-white border border-slate-200 rounded-2xl space-y-4 shadow-xs flex flex-col justify-between">
+        <div className="p-6 bg-white border border-slate-200 rounded-2xl space-y-4 shadow-xs">
           <div>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
               <div className="flex items-center space-x-2">
@@ -540,16 +546,25 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
                       <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
                         <span>{formatTime(ord.createdAt)}</span>
                         <span>•</span>
-                        <span className="font-medium px-1.5 py-0.2 rounded text-[10px] bg-slate-100 text-slate-700">
+                        <span className="font-medium text-slate-600">
                           {ord.paymentMethod}
                         </span>
                         <span>•</span>
                         <span>{ord.items.length} Item</span>
+                        {ord.branchName && (
+                          <>
+                            <span>•</span>
+                            <span className="inline-flex items-center space-x-1 font-medium text-slate-600">
+                              <Building2 className="w-2.5 h-2.5 text-slate-400" />
+                              <span>{ord.branchName}</span>
+                            </span>
+                          </>
+                        )}
                         {ord.externalOrderId && (
                           <>
                             <span>•</span>
-                            <span className="font-mono text-teal-700 font-semibold bg-teal-50 px-1 py-0.2 rounded border border-teal-200">
-                              {ord.externalOrderId}
+                            <span className="font-mono text-slate-500">
+                              #{ord.externalOrderId}
                             </span>
                           </>
                         )}
@@ -578,15 +593,6 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
                 ))
               )}
             </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-100 flex justify-end">
-            <button
-              onClick={() => setIsCreateOrderModalOpen(true)}
-              className="text-xs font-semibold text-teal-600 hover:underline cursor-pointer"
-            >
-              Buka Kasir Penjualan Baru
-            </button>
           </div>
         </div>
       </div>

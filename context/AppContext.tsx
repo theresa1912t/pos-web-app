@@ -26,6 +26,10 @@ import {
   ProductChannelMapping,
   ChannelIntegration,
   ChannelSyncError,
+  Branch,
+  BranchStatus,
+  ProductInventory,
+  TabType,
 } from '@/types';
 import {
   getSupabase,
@@ -38,12 +42,20 @@ import { calculateWeightedCOGS, generateOrderId } from '@/lib/utils';
 import {
   INITIAL_SETTINGS,
   INITIAL_SEED_PRODUCTS,
+  INITIAL_PRODUCTS,
+  INITIAL_ORDERS,
+  INITIAL_RESTOCKS,
+  INITIAL_REVENUES,
+  INITIAL_COSTS,
   INITIAL_RACKS,
   INITIAL_STOCK_OPNAMES,
   INITIAL_STOCK_OPNAME_SCHEDULES,
   INITIAL_CHANNEL_INTEGRATIONS,
   INITIAL_PRODUCT_MAPPINGS,
   INITIAL_CHANNEL_SYNC_ERRORS,
+  INITIAL_BRANCHES,
+  INITIAL_PRODUCT_INVENTORIES,
+  generateProductInventories,
 } from '@/lib/storage';
 import {
   DEFAULT_ROLES,
@@ -51,12 +63,27 @@ import {
   checkPermission,
   generateSecurePassword,
   credentialsStore,
+  canAccessAllBranches,
+  hasBranchAccess,
 } from '@/lib/rbac';
 
 interface AppContextType {
   products: Product[];
   categories: Category[];
   racks: Rack[];
+  branches: Branch[];
+  activeBranchId: string;
+  setActiveBranchId: (id: string) => void;
+  activeBranch: Branch | null;
+  accessibleBranches: Branch[];
+  canSwitchToAllBranches: boolean;
+  productInventories: ProductInventory[];
+  addBranch: (data: Omit<Branch, 'id' | 'createdAt'>) => Promise<Branch>;
+  updateBranch: (id: string, data: Partial<Branch>) => Promise<void>;
+  toggleBranchStatus: (id: string) => Promise<{ success: boolean; error?: string }>;
+  getProductStockInBranch: (productId: string, branchId?: string) => number;
+  getBranchInventory: (branchId: string) => ProductInventory[];
+  updateBranchStock: (productId: string, branchId: string, stock: number, rackId?: string, rackName?: string) => Promise<void>;
   stockOpnames: StockOpname[];
   stockOpnameSchedules: StockOpnameSchedule[];
   orders: Order[];
@@ -112,8 +139,8 @@ interface AppContextType {
   updateRole: (roleId: string, roleData: { name?: string; description?: string; permissions?: Record<AppModule, ModulePermission> }) => Promise<{ success: boolean; error?: string }>;
   deleteRole: (roleId: string) => Promise<{ success: boolean; error?: string }>;
 
-  createUser: (userData: { name: string; username: string; password?: string; roleId: string; phone?: string }) => Promise<{ success: boolean; user?: AppUser; generatedPassword?: string; error?: string }>;
-  updateUser: (userId: string, userData: { name?: string; username?: string; roleId?: string; phone?: string; status?: UserStatus }) => Promise<{ success: boolean; error?: string }>;
+  createUser: (userData: { name: string; username: string; password?: string; roleId: string; phone?: string; branchAccess?: string[] }) => Promise<{ success: boolean; user?: AppUser; generatedPassword?: string; error?: string }>;
+  updateUser: (userId: string, userData: { name?: string; username?: string; roleId?: string; phone?: string; status?: UserStatus; branchAccess?: string[] }) => Promise<{ success: boolean; error?: string }>;
   toggleUserStatus: (userId: string) => Promise<{ success: boolean; error?: string }>;
   resetUserPassword: (userId: string) => Promise<{ success: boolean; temporaryPassword?: string; error?: string }>;
 
@@ -135,8 +162,8 @@ interface AppContextType {
   deleteCategory: (id: string) => Promise<boolean>;
 
   // Rack Management
-  addRack: (data: { name: string; code: string; locationDescription?: string }) => Promise<Rack>;
-  updateRack: (id: string, data: { name?: string; code?: string; locationDescription?: string }) => Promise<void>;
+  addRack: (data: { name: string; code: string; locationDescription?: string; branchId?: string; branchName?: string }) => Promise<Rack>;
+  updateRack: (id: string, data: { name?: string; code?: string; locationDescription?: string; branchId?: string; branchName?: string }) => Promise<void>;
   deleteRack: (id: string) => Promise<boolean>;
 
   // Stock Opname Management
@@ -144,6 +171,8 @@ interface AppContextType {
     scope: 'All' | 'Category' | 'Rack';
     scopeTargetId?: string;
     scopeTargetName?: string;
+    branchId?: string;
+    branchName?: string;
     items: StockOpnameItem[];
     notes?: string;
   }) => Promise<StockOpname>;
@@ -166,7 +195,8 @@ interface AppContextType {
     productId: string,
     quantity: number,
     purchaseCostPerItem: number,
-    notes?: string
+    notes?: string,
+    branchId?: string
   ) => Promise<RestockRecord | null>;
 
   createOrder: (
@@ -175,7 +205,8 @@ interface AppContextType {
     cashTendered?: number,
     changeAmount?: number,
     salesChannel?: SalesChannel,
-    externalOrderId?: string
+    externalOrderId?: string,
+    branchId?: string
   ) => Promise<Order | null>;
 
   cancelOrder: (orderId: string) => Promise<boolean>;
@@ -184,7 +215,8 @@ interface AppContextType {
     amount: number,
     description: string,
     date?: string,
-    notes?: string
+    notes?: string,
+    branchId?: string
   ) => Promise<Revenue>;
 
   addCost: (
@@ -192,7 +224,8 @@ interface AppContextType {
     category: CostCategory,
     description: string,
     date?: string,
-    notes?: string
+    notes?: string,
+    branchId?: string
   ) => Promise<Cost>;
 
   updateSettings: (newSettings: Partial<BusinessSettings>) => Promise<void>;
@@ -203,8 +236,8 @@ interface AppContextType {
   setIsCreateOrderModalOpen: (open: boolean) => void;
   restockModalProductId: string | null;
   setRestockModalProductId: (productId: string | null) => void;
-  activeTab: 'dashboard' | 'orders' | 'products' | 'stock_opname' | 'finance' | 'perangkat_kasir' | 'integrasi_channel' | 'users' | 'settings';
-  setActiveTab: (tab: 'dashboard' | 'orders' | 'products' | 'stock_opname' | 'finance' | 'perangkat_kasir' | 'integrasi_channel' | 'users' | 'settings') => void;
+  activeTab: TabType;
+  setActiveTab: (tab: TabType) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -243,6 +276,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [racks, setRacks] = useState<Rack[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [productInventories, setProductInventories] = useState<ProductInventory[]>([]);
+  const [activeBranchId, setActiveBranchIdState] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'all';
+    try {
+      return sessionStorage.getItem('warung_active_branch_v1') || 'all';
+    } catch {
+      return 'all';
+    }
+  });
+
+  const setActiveBranchId = useCallback((id: string) => {
+    setActiveBranchIdState(id);
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem('warung_active_branch_v1', id);
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
   const [stockOpnames, setStockOpnames] = useState<StockOpname[]>([]);
   const [stockOpnameSchedules, setStockOpnameSchedules] = useState<StockOpnameSchedule[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -267,7 +322,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Global Action Modals & Tabs
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
   const [restockModalProductId, setRestockModalProductId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'products' | 'stock_opname' | 'finance' | 'perangkat_kasir' | 'integrasi_channel' | 'users' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
 
   // Compute currently logged-in user's role
   const currentUserRole = useMemo<AppRole | null>(() => {
@@ -277,6 +332,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const defaultOwnerRole = roles.find((r) => r.id === 'role-owner-admin') || DEFAULT_ROLES[0];
     return defaultOwnerRole;
   }, [user, roles]);
+
+  // Branch access authorization
+  const canSwitchToAllBranches = useMemo(() => {
+    return canAccessAllBranches(user, currentUserRole);
+  }, [user, currentUserRole]);
+
+  const accessibleBranches = useMemo(() => {
+    if (!user || canSwitchToAllBranches) return branches;
+    const access = user.branchAccess || [];
+    return branches.filter((b) => access.includes(b.id));
+  }, [branches, user, canSwitchToAllBranches]);
+
+  useEffect(() => {
+    if (!canSwitchToAllBranches && accessibleBranches.length > 0) {
+      if (activeBranchId === 'all' || !accessibleBranches.some((b) => b.id === activeBranchId)) {
+        const fallbackId = accessibleBranches[0].id;
+        queueMicrotask(() => {
+          setActiveBranchId(fallbackId);
+        });
+      }
+    }
+  }, [canSwitchToAllBranches, accessibleBranches, activeBranchId, setActiveBranchId]);
+
+  const activeBranch = useMemo(() => {
+    if (activeBranchId === 'all') return null;
+    return branches.find((b) => b.id === activeBranchId) || null;
+  }, [branches, activeBranchId]);
 
   // Check permission helper
   const hasPermission = useCallback((module: AppModule, action: 'view' | 'create' | 'edit' | 'delete' = 'view'): boolean => {
@@ -475,6 +557,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
             return {
               id: o.id,
+              branchId: o.branch_id || undefined,
+              branchName: o.branch_name || undefined,
               items,
               total: Number(o.total),
               totalCogs: Number(o.total_cogs),
@@ -498,6 +582,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (restockData) {
           setRestocks(restockData.map(r => ({
             id: r.id,
+            branchId: r.branch_id || undefined,
+            branchName: r.branch_name || undefined,
             productId: r.product_id,
             productName: r.product_name,
             quantity: Number(r.quantity),
@@ -522,6 +608,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             id: r.id,
             amount: Number(r.amount),
             source: r.source as 'Order' | 'Manual',
+            branchId: r.branch_id || undefined,
+            branchName: r.branch_name || undefined,
             orderId: r.order_id || undefined,
             description: r.description,
             date: r.date,
@@ -540,11 +628,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
             amount: Number(c.amount),
             category: c.category as CostCategory,
             source: c.source as 'Restock' | 'Manual',
+            branchId: c.branch_id || undefined,
+            branchName: c.branch_name || undefined,
             restockId: c.restock_id || undefined,
             description: c.description,
             date: c.date,
             notes: c.notes || undefined,
           })));
+        }
+
+        // 11. Fetch Branches
+        const { data: branchData } = await supabase
+          .from('branches')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        let loadedBranches: Branch[] = [];
+        if (branchData && branchData.length > 0) {
+          loadedBranches = branchData.map((b) => ({
+            id: b.id,
+            name: b.name,
+            code: b.code,
+            address: b.address || '',
+            phone: b.phone || '',
+            status: (b.status as BranchStatus) || 'Active',
+            createdAt: b.created_at,
+          }));
+        } else {
+          loadedBranches = JSON.parse(JSON.stringify(INITIAL_BRANCHES));
+        }
+        setBranches(loadedBranches);
+
+        // 12. Fetch Product Inventories
+        const { data: invData } = await supabase
+          .from('product_inventories')
+          .select('*');
+
+        if (invData && invData.length > 0) {
+          setProductInventories(invData.map((i) => ({
+            id: i.id,
+            productId: i.product_id,
+            branchId: i.branch_id,
+            stock: Number(i.stock),
+            rackId: i.rack_id || undefined,
+            rackName: i.rack_name || undefined,
+          })));
+        } else {
+          setProductInventories(generateProductInventories(prodData || INITIAL_SEED_PRODUCTS, loadedBranches));
         }
 
         setIsLoaded(true);
@@ -577,12 +707,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProductMappings(stored.productMappings || JSON.parse(JSON.stringify(INITIAL_PRODUCT_MAPPINGS)));
     setChannelSyncErrors(stored.channelSyncErrors || JSON.parse(JSON.stringify(INITIAL_CHANNEL_SYNC_ERRORS)));
 
+    const loadedBranches = stored.branches || JSON.parse(JSON.stringify(INITIAL_BRANCHES));
+    setBranches(loadedBranches);
+    setProductInventories(stored.productInventories || generateProductInventories(stored.products, loadedBranches));
+
     // Sync active user role & status if in user list
     const foundUser = (stored.users || []).find((u) => u.id === activeUser.id || u.email === activeUser.email);
     if (foundUser) {
       activeUser.roleId = foundUser.roleId;
       activeUser.username = foundUser.username;
       activeUser.status = foundUser.status;
+      if (foundUser.branchAccess) {
+        activeUser.branchAccess = foundUser.branchAccess;
+      }
       setUser({ ...activeUser });
     }
 
@@ -606,7 +743,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     newStockOpnameSchedules = stockOpnameSchedules,
     newChannelIntegrations = channelIntegrations,
     newProductMappings = productMappings,
-    newChannelSyncErrors = channelSyncErrors
+    newChannelSyncErrors = channelSyncErrors,
+    newBranches = branches,
+    newProductInventories = productInventories
   ) => {
     if (!user) return;
     localUserDataStore.saveUserData(user.id, {
@@ -626,8 +765,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       channelIntegrations: newChannelIntegrations,
       productMappings: newProductMappings,
       channelSyncErrors: newChannelSyncErrors,
+      branches: newBranches,
+      productInventories: newProductInventories,
     });
-  }, [user, products, categories, orders, restocks, revenues, costs, settings, roles, users, hasCompletedOnboarding, racks, stockOpnames, stockOpnameSchedules, channelIntegrations, productMappings, channelSyncErrors]);
+  }, [user, products, categories, orders, restocks, revenues, costs, settings, roles, users, hasCompletedOnboarding, racks, stockOpnames, stockOpnameSchedules, channelIntegrations, productMappings, channelSyncErrors, branches, productInventories]);
 
   // Handle Supabase Auth State synchronization on mount
   useEffect(() => {
@@ -1120,6 +1261,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     password?: string;
     roleId: string;
     phone?: string;
+    branchAccess?: string[];
   }): Promise<{ success: boolean; user?: AppUser; generatedPassword?: string; error?: string }> => {
     const trimmedUsername = userData.username.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
     const trimmedName = userData.name.trim();
@@ -1148,6 +1290,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       email: syntheticEmail,
       phone: userData.phone?.trim() || '',
       roleId: userData.roleId,
+      branchAccess: userData.branchAccess && userData.branchAccess.length > 0 ? userData.branchAccess : ['*'],
       status: 'active',
       createdAt: new Date().toISOString(),
       onboardingCompleted: true,
@@ -1161,7 +1304,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
-    persistUserLocalState(products, categories, orders, restocks, revenues, costs, settings, roles, updatedUsers, hasCompletedOnboarding);
+    persistUserLocalState(products, categories, orders, restocks, revenues, costs, settings, roles, updatedUsers, hasCompletedOnboarding, racks, stockOpnames, stockOpnameSchedules, channelIntegrations, productMappings, channelSyncErrors, branches, productInventories);
 
     const supabase = getSupabase();
     if (supabase) {
@@ -1207,7 +1350,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateUser = async (
     userId: string,
-    userData: { name?: string; username?: string; roleId?: string; phone?: string; status?: UserStatus }
+    userData: { name?: string; username?: string; roleId?: string; phone?: string; status?: UserStatus; branchAccess?: string[] }
   ): Promise<{ success: boolean; error?: string }> => {
     const target = users.find((u) => u.id === userId);
     if (!target) return { success: false, error: 'Pengguna tidak ditemukan.' };
@@ -1221,13 +1364,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
           roleId: userData.roleId !== undefined ? userData.roleId : u.roleId,
           phone: userData.phone !== undefined ? userData.phone.trim() : u.phone,
           status: userData.status !== undefined ? userData.status : u.status,
+          branchAccess: userData.branchAccess !== undefined ? userData.branchAccess : u.branchAccess,
         };
       }
       return u;
     });
 
     setUsers(updatedUsers);
-    persistUserLocalState(products, categories, orders, restocks, revenues, costs, settings, roles, updatedUsers, hasCompletedOnboarding);
+    persistUserLocalState(products, categories, orders, restocks, revenues, costs, settings, roles, updatedUsers, hasCompletedOnboarding, racks, stockOpnames, stockOpnameSchedules, channelIntegrations, productMappings, channelSyncErrors, branches, productInventories);
+
+    // If updating current user, sync state
+    if (user && (user.id === target.id || user.id === target.authUserId)) {
+      setUser(prev => prev ? {
+        ...prev,
+        name: userData.name !== undefined ? userData.name.trim() : prev.name,
+        roleId: userData.roleId !== undefined ? userData.roleId : prev.roleId,
+        branchAccess: userData.branchAccess !== undefined ? userData.branchAccess : prev.branchAccess,
+      } : prev);
+    }
 
     const supabase = getSupabase();
     if (supabase) {
@@ -1282,6 +1436,224 @@ export function AppProvider({ children }: { children: ReactNode }) {
       temporaryPassword: newTempPassword,
     };
   };
+
+  // BRANCH MANAGEMENT METHODS
+  const addBranch = async (branchData: Omit<Branch, 'id' | 'createdAt'>): Promise<Branch> => {
+    const newBranch: Branch = {
+      ...branchData,
+      id: `branch-${Date.now()}`,
+      name: branchData.name.trim(),
+      code: branchData.code.trim().toUpperCase(),
+      address: branchData.address?.trim() || '',
+      phone: branchData.phone?.trim() || '',
+      status: branchData.status || 'Active',
+      createdAt: new Date().toISOString(),
+    };
+
+    const nextBranches = [...branches, newBranch];
+    setBranches(nextBranches);
+
+    // Initialize inventory records for this branch for existing products
+    const newInventories: ProductInventory[] = products.map((prod) => ({
+      id: `inv-${prod.id}-${newBranch.id}`,
+      productId: prod.id,
+      branchId: newBranch.id,
+      stock: 0,
+      rackId: undefined,
+      rackName: undefined,
+    }));
+    const nextInventories = [...productInventories, ...newInventories];
+    setProductInventories(nextInventories);
+
+    persistUserLocalState(
+      products,
+      categories,
+      orders,
+      restocks,
+      revenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      nextBranches,
+      nextInventories
+    );
+
+    const supabase = getSupabase();
+    if (supabase && user) {
+      try {
+        await supabase.from('branches').insert({
+          id: newBranch.id,
+          user_id: user.id,
+          name: newBranch.name,
+          code: newBranch.code,
+          address: newBranch.address,
+          phone: newBranch.phone,
+          status: newBranch.status,
+        });
+      } catch (e) {
+        console.warn('Supabase add branch notice:', e);
+      }
+    }
+
+    return newBranch;
+  };
+
+  const updateBranch = async (id: string, branchData: Partial<Branch>): Promise<void> => {
+    const nextBranches = branches.map((b) => {
+      if (b.id === id) {
+        return {
+          ...b,
+          name: branchData.name !== undefined ? branchData.name.trim() : b.name,
+          code: branchData.code !== undefined ? branchData.code.trim().toUpperCase() : b.code,
+          address: branchData.address !== undefined ? branchData.address.trim() : b.address,
+          phone: branchData.phone !== undefined ? branchData.phone.trim() : b.phone,
+          status: branchData.status || b.status,
+        };
+      }
+      return b;
+    });
+    setBranches(nextBranches);
+
+    persistUserLocalState(
+      products,
+      categories,
+      orders,
+      restocks,
+      revenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      nextBranches,
+      productInventories
+    );
+
+    const supabase = getSupabase();
+    if (supabase && user) {
+      try {
+        await supabase.from('branches').update({
+          ...(branchData.name ? { name: branchData.name.trim() } : {}),
+          ...(branchData.code ? { code: branchData.code.trim().toUpperCase() } : {}),
+          ...(branchData.address !== undefined ? { address: branchData.address.trim() } : {}),
+          ...(branchData.phone !== undefined ? { phone: branchData.phone.trim() } : {}),
+          ...(branchData.status ? { status: branchData.status } : {}),
+        }).eq('id', id).eq('user_id', user.id);
+      } catch (e) {
+        console.warn('Supabase update branch notice:', e);
+      }
+    }
+  };
+
+  const toggleBranchStatus = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const branch = branches.find((b) => b.id === id);
+    if (!branch) return { success: false, error: 'Cabang tidak ditemukan' };
+
+    const activeCount = branches.filter((b) => b.status === 'Active').length;
+    if (branch.status === 'Active' && activeCount <= 1) {
+      return { success: false, error: 'Minimal harus ada 1 cabang aktif dalam sistem usaha' };
+    }
+
+    const nextStatus: BranchStatus = branch.status === 'Active' ? 'Inactive' : 'Active';
+    await updateBranch(id, { status: nextStatus });
+
+    if (activeBranchId === id && nextStatus === 'Inactive') {
+      const remaining = branches.find((b) => b.id !== id && b.status === 'Active');
+      setActiveBranchId(remaining ? remaining.id : 'all');
+    }
+
+    return { success: true };
+  };
+
+  const getProductStockInBranch = useCallback((productId: string, branchId?: string): number => {
+    const targetBranch = branchId || activeBranchId;
+    if (!targetBranch || targetBranch === 'all') {
+      const prod = products.find((p) => p.id === productId);
+      return prod?.stock ?? 0;
+    }
+    const inv = productInventories.find((i) => i.productId === productId && i.branchId === targetBranch);
+    return inv?.stock ?? 0;
+  }, [activeBranchId, products, productInventories]);
+
+  const getBranchInventory = useCallback((branchId: string): ProductInventory[] => {
+    return productInventories.filter((i) => i.branchId === branchId);
+  }, [productInventories]);
+
+  const updateBranchStock = useCallback(async (
+    productId: string,
+    branchId: string,
+    newStock: number,
+    rackId?: string,
+    rackName?: string
+  ) => {
+    const existingIdx = productInventories.findIndex((i) => i.productId === productId && i.branchId === branchId);
+    let nextInventories: ProductInventory[];
+    if (existingIdx >= 0) {
+      nextInventories = productInventories.map((inv, idx) =>
+        idx === existingIdx ? { ...inv, stock: newStock, rackId: rackId ?? inv.rackId, rackName: rackName ?? inv.rackName } : inv
+      );
+    } else {
+      nextInventories = [
+        ...productInventories,
+        {
+          id: `inv-${productId}-${branchId}`,
+          productId,
+          branchId,
+          stock: newStock,
+          rackId,
+          rackName,
+        },
+      ];
+    }
+    setProductInventories(nextInventories);
+
+    // Recalculate consolidated stock
+    const nextProducts = products.map((p) => {
+      if (p.id === productId) {
+        const totalStock = nextInventories
+          .filter((i) => i.productId === productId)
+          .reduce((sum, i) => sum + i.stock, 0);
+        return { ...p, stock: totalStock };
+      }
+      return p;
+    });
+    setProducts(nextProducts);
+
+    persistUserLocalState(
+      nextProducts,
+      categories,
+      orders,
+      restocks,
+      revenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      nextInventories
+    );
+  }, [productInventories, products, categories, orders, restocks, revenues, costs, settings, roles, users, hasCompletedOnboarding, racks, stockOpnames, stockOpnameSchedules, channelIntegrations, productMappings, channelSyncErrors, branches, persistUserLocalState]);
 
   // COMPLETE ONBOARDING
   const completeOnboarding = async (data: OnboardingData): Promise<{ success: boolean; error?: string }> => {
@@ -1881,8 +2253,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const toAdd = productsToAdd.length > 0 ? productsToAdd : finalSeedProducts;
       const nextProducts = [...toAdd, ...products];
 
+      // If user has no orders, also seed the full suite of staging dummy data (orders, restocks, finances, stock opnames, racks)
+      let nextOrders = orders;
+      let nextRestocks = restocks;
+      let nextRevenues = revenues;
+      let nextCosts = costs;
+      let nextRacks = racks;
+      let nextStockOpnames = stockOpnames;
+      let nextStockOpnameSchedules = stockOpnameSchedules;
+
+      if (orders.length === 0) {
+        nextOrders = JSON.parse(JSON.stringify(INITIAL_ORDERS));
+        nextRestocks = JSON.parse(JSON.stringify(INITIAL_RESTOCKS));
+        nextRevenues = JSON.parse(JSON.stringify(INITIAL_REVENUES));
+        nextCosts = JSON.parse(JSON.stringify(INITIAL_COSTS));
+        nextRacks = JSON.parse(JSON.stringify(INITIAL_RACKS));
+        nextStockOpnames = JSON.parse(JSON.stringify(INITIAL_STOCK_OPNAMES));
+        nextStockOpnameSchedules = JSON.parse(JSON.stringify(INITIAL_STOCK_OPNAME_SCHEDULES));
+
+        setOrders(nextOrders);
+        setRestocks(nextRestocks);
+        setRevenues(nextRevenues);
+        setCosts(nextCosts);
+        setRacks(nextRacks);
+        setStockOpnames(nextStockOpnames);
+        setStockOpnameSchedules(nextStockOpnameSchedules);
+      }
+
       setProducts(nextProducts);
-      persistUserLocalState(nextProducts, nextCategories);
+      persistUserLocalState(
+        nextProducts,
+        nextCategories,
+        nextOrders,
+        nextRestocks,
+        nextRevenues,
+        nextCosts,
+        settings,
+        roles,
+        users,
+        hasCompletedOnboarding,
+        nextRacks,
+        nextStockOpnames,
+        nextStockOpnameSchedules
+      );
 
       // 3. Persist to Supabase if connected
       const supabase = getSupabase();
@@ -1934,10 +2347,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     productId: string,
     quantity: number,
     purchaseCostPerItem: number,
-    notes?: string
+    notes?: string,
+    branchId?: string
   ): Promise<RestockRecord | null> => {
     const product = products.find(p => p.id === productId);
     if (!product || quantity <= 0) return null;
+
+    const targetBranchId = branchId || (activeBranchId !== 'all' ? activeBranchId : (branches[0]?.id || 'branch-1'));
+    const targetBranch = branches.find(b => b.id === targetBranchId);
+    const targetBranchName = targetBranch?.name || 'Cabang Utama';
+
+    // Update branch inventory
+    const branchInv = productInventories.find(i => i.productId === productId && i.branchId === targetBranchId);
+    const prevBranchStock = branchInv ? branchInv.stock : 0;
+    const nextBranchStock = prevBranchStock + quantity;
+
+    let nextInventories: ProductInventory[];
+    if (branchInv) {
+      nextInventories = productInventories.map(inv =>
+        inv.id === branchInv.id ? { ...inv, stock: nextBranchStock } : inv
+      );
+    } else {
+      nextInventories = [
+        ...productInventories,
+        {
+          id: `inv-${productId}-${targetBranchId}`,
+          productId,
+          branchId: targetBranchId,
+          stock: nextBranchStock,
+        },
+      ];
+    }
+    setProductInventories(nextInventories);
 
     const previousStock = product.stock;
     const resultingStock = previousStock + quantity;
@@ -1954,6 +2395,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const restockRecordId = `rst-${Date.now()}`;
     const newRestock: RestockRecord = {
       id: restockRecordId,
+      branchId: targetBranchId,
+      branchName: targetBranchName,
       productId,
       productName: product.name,
       quantity,
@@ -1981,15 +2424,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       amount: totalCost,
       category: 'Restock',
       source: 'Restock',
+      branchId: targetBranchId,
+      branchName: targetBranchName,
       restockId: restockRecordId,
-      description: `Restock: ${product.name} (${quantity} ${product.unit})`,
+      description: `Restock: ${product.name} (${quantity} ${product.unit}) - ${targetBranchName}`,
       date: restockDate,
       notes,
     };
 
     const nextCosts = [newCost, ...costs];
     setCosts(nextCosts);
-    persistUserLocalState(nextProducts, categories, orders, nextRestocks, revenues, nextCosts);
+    persistUserLocalState(
+      nextProducts,
+      categories,
+      orders,
+      nextRestocks,
+      revenues,
+      nextCosts,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      nextInventories
+    );
 
     const supabase = getSupabase();
     if (supabase && user) {
@@ -1997,6 +2461,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await supabase.from('restocks').insert({
         id: restockRecordId,
         user_id: user.id,
+        branch_id: targetBranchId,
+        branch_name: targetBranchName,
         product_id: productId,
         product_name: product.name,
         quantity,
@@ -2012,11 +2478,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await supabase.from('costs').insert({
         id: newCostId,
         user_id: user.id,
+        branch_id: targetBranchId,
+        branch_name: targetBranchName,
         amount: totalCost,
         category: 'Restock',
         source: 'Restock',
         restock_id: restockRecordId,
-        description: `Restock: ${product.name} (${quantity} ${product.unit})`,
+        description: `Restock: ${product.name} (${quantity} ${product.unit}) - ${targetBranchName}`,
         date: restockDate,
         notes: notes || '',
       });
@@ -2032,9 +2500,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     cashTendered?: number,
     changeAmount?: number,
     salesChannel: SalesChannel = 'Offline / Kasir',
-    externalOrderId?: string
+    externalOrderId?: string,
+    branchId?: string
   ): Promise<Order | null> => {
     if (items.length === 0) return null;
+
+    const targetBranchId = branchId || (activeBranchId !== 'all' ? activeBranchId : (branches[0]?.id || 'branch-1'));
+    const targetBranch = branches.find(b => b.id === targetBranchId);
+    const targetBranchName = targetBranch?.name || 'Cabang Utama';
 
     let total = 0;
     let totalCogs = 0;
@@ -2056,6 +2529,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const newOrder: Order = {
       id: generateOrderId(),
+      branchId: targetBranchId,
+      branchName: targetBranchName,
       items: orderItems,
       total,
       totalCogs,
@@ -2068,7 +2543,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
     };
 
-    // Central inventory deduction
+    // Deduct stock in the target branch inventory
+    const nextInventories = productInventories.map(inv => {
+      if (inv.branchId === targetBranchId) {
+        const orderItem = items.find(i => i.product.id === inv.productId);
+        if (orderItem) {
+          return {
+            ...inv,
+            stock: Math.max(0, inv.stock - orderItem.quantity),
+          };
+        }
+      }
+      return inv;
+    });
+    setProductInventories(nextInventories);
+
+    // Consolidated stock deduction
     const nextProducts = products.map(prod => {
       const orderItem = items.find(i => i.product.id === prod.id);
       if (orderItem) {
@@ -2085,8 +2575,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       amount: total,
       source: 'Order',
       salesChannel: newOrder.salesChannel,
+      branchId: targetBranchId,
+      branchName: targetBranchName,
       orderId: newOrder.id,
-      description: `Penjualan ${salesChannel} (${items.length} item)`,
+      description: `Penjualan ${salesChannel} (${items.length} item) - ${targetBranchName}`,
       date: newOrder.createdAt,
     };
 
@@ -2096,13 +2588,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOrders(nextOrders);
     setProducts(nextProducts);
     setRevenues(nextRevenues);
-    persistUserLocalState(nextProducts, categories, nextOrders, restocks, nextRevenues);
+    persistUserLocalState(
+      nextProducts,
+      categories,
+      nextOrders,
+      restocks,
+      nextRevenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      nextInventories
+    );
 
     const supabase = getSupabase();
     if (supabase && user) {
       await supabase.from('orders').insert({
         id: newOrder.id,
         user_id: user.id,
+        branch_id: targetBranchId,
+        branch_name: targetBranchName,
         total: newOrder.total,
         total_cogs: newOrder.totalCogs,
         payment_method: newOrder.paymentMethod,
@@ -2129,6 +2642,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await supabase.from('revenues').insert({
         id: newRevenue.id,
         user_id: user.id,
+        branch_id: targetBranchId,
+        branch_name: targetBranchName,
         amount: newRevenue.amount,
         source: 'Order',
         order_id: newOrder.id,
@@ -2163,13 +2678,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return prod;
     });
 
+    const targetBranchId = order.branchId;
+    let nextInventories = productInventories;
+    if (targetBranchId) {
+      nextInventories = productInventories.map(inv => {
+        if (inv.branchId === targetBranchId) {
+          const item = order.items.find(i => i.productId === inv.productId);
+          if (item) {
+            return { ...inv, stock: inv.stock + item.quantity };
+          }
+        }
+        return inv;
+      });
+      setProductInventories(nextInventories);
+    }
+
     const nextOrders = orders.map(o => (o.id === orderId ? { ...o, status: 'Canceled' as const } : o));
     const nextRevenues = revenues.filter(r => r.orderId !== orderId);
 
     setOrders(nextOrders);
     setProducts(nextProducts);
     setRevenues(nextRevenues);
-    persistUserLocalState(nextProducts, categories, nextOrders, restocks, nextRevenues);
+    persistUserLocalState(
+      nextProducts,
+      categories,
+      nextOrders,
+      restocks,
+      nextRevenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      nextInventories
+    );
 
     const supabase = getSupabase();
     if (supabase && user) {
@@ -2190,12 +2739,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     amount: number,
     description: string,
     date?: string,
-    notes?: string
+    notes?: string,
+    branchId?: string
   ): Promise<Revenue> => {
+    const targetBranchId = branchId || (activeBranchId !== 'all' ? activeBranchId : (branches[0]?.id || 'branch-1'));
+    const targetBranch = branches.find(b => b.id === targetBranchId);
+    const targetBranchName = targetBranch?.name || 'Cabang Utama';
+
     const newRevenue: Revenue = {
       id: `rev-man-${Date.now()}`,
       amount,
       source: 'Manual',
+      branchId: targetBranchId,
+      branchName: targetBranchName,
       description,
       date: date || new Date().toISOString(),
       notes,
@@ -2203,13 +2759,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const nextRevenues = [newRevenue, ...revenues];
     setRevenues(nextRevenues);
-    persistUserLocalState(products, categories, orders, restocks, nextRevenues);
+    persistUserLocalState(
+      products,
+      categories,
+      orders,
+      restocks,
+      nextRevenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      productInventories
+    );
 
     const supabase = getSupabase();
     if (supabase && user) {
       await supabase.from('revenues').insert({
         id: newRevenue.id,
         user_id: user.id,
+        branch_id: targetBranchId,
+        branch_name: targetBranchName,
         amount: newRevenue.amount,
         source: 'Manual',
         description: newRevenue.description,
@@ -2227,13 +2804,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     category: CostCategory,
     description: string,
     date?: string,
-    notes?: string
+    notes?: string,
+    branchId?: string
   ): Promise<Cost> => {
+    const targetBranchId = branchId || (activeBranchId !== 'all' ? activeBranchId : (branches[0]?.id || 'branch-1'));
+    const targetBranch = branches.find(b => b.id === targetBranchId);
+    const targetBranchName = targetBranch?.name || 'Cabang Utama';
+
     const newCost: Cost = {
       id: `cost-man-${Date.now()}`,
       amount,
       category,
       source: 'Manual',
+      branchId: targetBranchId,
+      branchName: targetBranchName,
       description,
       date: date || new Date().toISOString(),
       notes,
@@ -2241,13 +2825,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const nextCosts = [newCost, ...costs];
     setCosts(nextCosts);
-    persistUserLocalState(products, categories, orders, restocks, revenues, nextCosts);
+    persistUserLocalState(
+      products,
+      categories,
+      orders,
+      restocks,
+      revenues,
+      nextCosts,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      productInventories
+    );
 
     const supabase = getSupabase();
     if (supabase && user) {
       await supabase.from('costs').insert({
         id: newCost.id,
         user_id: user.id,
+        branch_id: targetBranchId,
+        branch_name: targetBranchName,
         amount: newCost.amount,
         category: newCost.category,
         source: 'Manual',
@@ -2723,6 +3328,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         currentUserRole,
         hasPermission,
         isLoaded,
+
+        // Branch management
+        branches,
+        productInventories,
+        activeBranchId,
+        activeBranch,
+        canSwitchToAllBranches,
+        accessibleBranches,
+        setActiveBranchId,
+        addBranch,
+        updateBranch,
+        toggleBranchStatus,
+        getProductStockInBranch,
+        getBranchInventory,
+        updateBranchStock,
 
         // Omnichannel states & actions
         channelIntegrations,

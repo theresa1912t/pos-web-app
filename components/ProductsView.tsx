@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Product, Category, Rack } from '@/types';
 import { formatRupiah } from '@/lib/utils';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
-import { RackManagementTab } from '@/components/RackManagementTab';
-import { StockOpnameTab } from '@/components/StockOpnameTab';
+import { TablePagination } from '@/components/TablePagination';
 import {
   Package,
   Plus,
@@ -27,6 +26,8 @@ import {
   Layers,
   ClipboardCheck,
   Sparkles,
+  Building2,
+  AlertTriangle,
 } from 'lucide-react';
 
 export function ProductsView() {
@@ -45,10 +46,14 @@ export function ProductsView() {
     bulkImportProducts,
     seedInitialData,
     setRestockModalProductId,
+    branches,
+    activeBranchId,
+    activeBranch,
+    getProductStockInBranch,
   } = useApp();
 
-  // Subtab: 'products' | 'categories' | 'racks' | 'opname'
-  const [subTab, setSubTab] = useState<'products' | 'categories' | 'racks' | 'opname'>('products');
+  // Subtab: 'products' | 'categories'
+  const [subTab, setSubTab] = useState<'products' | 'categories'>('products');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
   const [selectedRackFilter, setSelectedRackFilter] = useState<string>('all');
@@ -88,6 +93,20 @@ export function ProductsView() {
   // Bulk Import Modal
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
+  // Confirmation Modals State
+  const [confirmArchiveProduct, setConfirmArchiveProduct] = useState<{
+    product: Product;
+    mode: 'archive' | 'unarchive';
+  } | null>(null);
+
+  const [categoryDeleteAction, setCategoryDeleteAction] = useState<{
+    category: Category;
+    count: number;
+  } | null>(null);
+
+  const [showConfirmSeed, setShowConfirmSeed] = useState(false);
+  const [confirmCategorySave, setConfirmCategorySave] = useState(false);
+
   // Filtered Products
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -108,6 +127,20 @@ export function ProductsView() {
     });
   }, [products, showArchived, searchQuery, selectedCategoryFilter, selectedRackFilter]);
 
+  // Standard 20-row Pagination state
+  const [productPage, setProductPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
+  // Safe page clamping without triggering cascading render effect
+  const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / ITEMS_PER_PAGE));
+  const safeProductPage = Math.min(Math.max(1, productPage), totalProductPages);
+
+  // Paged Products
+  const pagedProducts = useMemo(() => {
+    const start = (safeProductPage - 1) * ITEMS_PER_PAGE;
+    return filteredProducts.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredProducts, safeProductPage]);
+
   // Open Create Product
   const handleOpenCreateProduct = () => {
     setEditingProduct(null);
@@ -122,25 +155,12 @@ export function ProductsView() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Top Header & Sub-tabs */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-        <div className="flex items-center space-x-3.5">
-          <div className="w-11 h-11 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center">
-            <Package className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-slate-900">Manajemen Produk & Inventaris</h2>
-            <p className="text-xs text-slate-500">
-              Kelola master barang, klasifikasi kategori, penataan rak fisik, dan rekonsiliasi stock opname
-            </p>
-          </div>
-        </div>
-
-        {/* Subtab Switches */}
-        <div className="flex items-center space-x-1.5 p-1 bg-slate-100 rounded-xl text-xs flex-wrap gap-y-1">
+      {/* Subtab Switches (Hug Content) & Action Buttons */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="inline-flex items-center space-x-1.5 p-1 bg-slate-100 rounded-xl text-xs border border-slate-200/60 shadow-xs w-fit">
           <button
             onClick={() => setSubTab('products')}
-            className={`px-3.5 py-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`px-3.5 py-2 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap ${
               subTab === 'products'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
@@ -150,7 +170,7 @@ export function ProductsView() {
           </button>
           <button
             onClick={() => setSubTab('categories')}
-            className={`px-3.5 py-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`px-3.5 py-2 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap ${
               subTab === 'categories'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
@@ -158,120 +178,125 @@ export function ProductsView() {
           >
             Kategori ({categories.length})
           </button>
-          <button
-            onClick={() => setSubTab('racks')}
-            className={`px-3.5 py-2 rounded-lg font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
-              subTab === 'racks'
-                ? 'bg-teal-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Manajemen Rak ({racks.length})</span>
-          </button>
-          <button
-            onClick={() => setSubTab('opname')}
-            className={`px-3.5 py-2 rounded-lg font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
-              subTab === 'opname'
-                ? 'bg-teal-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-          >
-            <ClipboardCheck className="w-3.5 h-3.5" />
-            <span>Stock Opname</span>
-          </button>
         </div>
+
+        {/* Action Buttons on Right Side */}
+        {subTab === 'products' ? (
+          <div className="flex items-center flex-wrap gap-2 shrink-0 sm:self-auto self-start">
+            <button
+              onClick={() => setShowConfirmSeed(true)}
+              disabled={isSeeding}
+              className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              title="Populasikan inventaris dengan 10 produk contoh realistis (Indomie, Aqua, Kopi, Sembako)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+              <span>{isSeeding ? 'Memuat...' : 'Seed Data Contoh'}</span>
+            </button>
+
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center space-x-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-xs"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Import Produk</span>
+            </button>
+
+            <button
+              onClick={handleOpenCreateProduct}
+              className="flex items-center space-x-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tambah Produk</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 shrink-0 sm:self-auto self-start">
+            <button
+              onClick={() => {
+                setEditingCategory(null);
+                setCategoryNameInput('');
+                setCategoryError(null);
+                setIsCategoryModalOpen(true);
+              }}
+              className="flex items-center space-x-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tambah Kategori</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* SUBTAB 1: PRODUCTS LIST */}
       {subTab === 'products' && (
         <div className="space-y-4">
           {/* Controls Bar */}
-          <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex flex-1 flex-wrap items-center gap-2.5">
-              {/* Search */}
-              <div className="relative min-w-[200px] flex-1 max-w-xs">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Cari nama produk, barcode, rak..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-                />
-              </div>
-
-              {/* Category Filter Dropdown */}
-              <select
-                value={selectedCategoryFilter}
-                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-teal-500 transition-colors"
-              >
-                <option value="all">Semua Kategori</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* Rack Filter Dropdown */}
-              <select
-                value={selectedRackFilter}
-                onChange={(e) => setSelectedRackFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-teal-500 transition-colors"
-              >
-                <option value="all">Semua Lokasi Rak</option>
-                <option value="unassigned">Belum Ada Rak</option>
-                {racks.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.code} - {r.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* Toggle Archived */}
-              <button
-                onClick={() => setShowArchived(!showArchived)}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-colors flex items-center space-x-1.5 cursor-pointer ${
-                  showArchived
-                    ? 'bg-teal-50 border-teal-200 text-teal-700'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-              >
-                <Archive className="w-3.5 h-3.5" />
-                <span>{showArchived ? 'Melihat Arsip' : 'Lihat Arsip'}</span>
-              </button>
+          <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-wrap items-center gap-2.5">
+            {/* Search */}
+            <div className="relative min-w-[200px] flex-1 max-w-xs">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Cari nama produk, barcode, rak..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setProductPage(1);
+                }}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+              />
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center flex-wrap gap-2 shrink-0">
-              <button
-                onClick={handleSeedInitialData}
-                disabled={isSeeding}
-                className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
-                title="Populasikan inventaris dengan 10 produk contoh realistis (Indomie, Aqua, Kopi, Sembako)"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>{isSeeding ? 'Memuat Data...' : 'Seed Data Contoh'}</span>
-              </button>
+            {/* Category Filter Dropdown */}
+            <select
+              value={selectedCategoryFilter}
+              onChange={(e) => {
+                setSelectedCategoryFilter(e.target.value);
+                setProductPage(1);
+              }}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-teal-500 transition-colors"
+            >
+              <option value="all">Semua Kategori</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
 
-              <button
-                onClick={() => setIsImportModalOpen(true)}
-                className="flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Import Produk</span>
-              </button>
+            {/* Rack Filter Dropdown */}
+            <select
+              value={selectedRackFilter}
+              onChange={(e) => {
+                setSelectedRackFilter(e.target.value);
+                setProductPage(1);
+              }}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-teal-500 transition-colors"
+            >
+              <option value="all">Semua Lokasi Rak</option>
+              <option value="unassigned">Belum Ada Rak</option>
+              {racks.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.code} - {r.name}
+                </option>
+              ))}
+            </select>
 
-              <button
-                onClick={handleOpenCreateProduct}
-                className="flex items-center space-x-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Produk</span>
-              </button>
-            </div>
+            {/* Toggle Archived */}
+            <button
+              onClick={() => {
+                setShowArchived(!showArchived);
+                setProductPage(1);
+              }}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-colors flex items-center space-x-1.5 cursor-pointer ${
+                showArchived
+                  ? 'bg-teal-50 border-teal-200 text-teal-700'
+                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>{showArchived ? 'Melihat Arsip' : 'Lihat Arsip'}</span>
+            </button>
           </div>
 
           {/* Seed Feedback Toast/Banner */}
@@ -302,7 +327,14 @@ export function ProductsView() {
                     <th className="py-3.5 px-4">Lokasi Rak</th>
                     <th className="py-3.5 px-4 text-right">Harga Jual</th>
                     <th className="py-3.5 px-4 text-right">HPP per Item</th>
-                    <th className="py-3.5 px-4 text-right">Stok</th>
+                    <th className="py-3.5 px-4 text-right">
+                      <div className="flex flex-col items-end">
+                        <span>Stok</span>
+                        <span className="text-[9px] lowercase font-normal text-teal-600">
+                          {activeBranchId !== 'all' ? (activeBranch?.name || 'Cabang') : 'semua cabang'}
+                        </span>
+                      </div>
+                    </th>
                     <th className="py-3.5 px-4">Satuan</th>
                     <th className="py-3.5 px-4 text-center">Aksi</th>
                   </tr>
@@ -350,7 +382,7 @@ export function ProductsView() {
                       </td>
                     </tr>
                   ) : (
-                    filteredProducts.map((prod) => {
+                    pagedProducts.map((prod) => {
                       const isLowStock = prod.stock <= (prod.minStockThreshold ?? 5);
                       const rackInfo = racks.find((r) => r.id === prod.rackId);
                       const displayRack = prod.rackName || (rackInfo ? `${rackInfo.code}` : null);
@@ -394,20 +426,18 @@ export function ProductsView() {
                           </td>
 
                           {/* Category */}
-                          <td className="py-2.5 px-4">
-                            <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-700">
-                              {prod.category}
-                            </span>
+                          <td className="py-2.5 px-4 text-xs font-medium text-slate-600">
+                            {prod.category}
                           </td>
 
                           {/* Rack Location */}
                           <td className="py-2.5 px-4">
                             {displayRack ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-[11px] font-mono font-semibold text-teal-800">
+                              <span className="font-mono text-xs font-medium text-slate-700">
                                 {displayRack}
                               </span>
                             ) : (
-                              <span className="text-[11px] text-slate-400 italic">
+                              <span className="text-xs text-slate-400 italic">
                                 -
                               </span>
                             )}
@@ -425,13 +455,23 @@ export function ProductsView() {
 
                           {/* Stock */}
                           <td className="py-2.5 px-4 text-right">
-                            <span
-                              className={`font-bold text-sm ${
-                                isLowStock ? 'text-amber-600' : 'text-slate-800'
-                              }`}
-                            >
-                              {prod.stock}
-                            </span>
+                            {(() => {
+                              const displayStock =
+                                activeBranchId !== 'all'
+                                  ? getProductStockInBranch(prod.id, activeBranchId)
+                                  : prod.stock;
+                              const isLowInDisplay = displayStock <= (prod.minStockThreshold ?? 5);
+
+                              return (
+                                <span
+                                  className={`font-bold text-sm ${
+                                    isLowInDisplay ? 'text-amber-600' : 'text-slate-800'
+                                  }`}
+                                >
+                                  {displayStock}
+                                </span>
+                              );
+                            })()}
                           </td>
 
                           {/* Unit */}
@@ -463,7 +503,7 @@ export function ProductsView() {
                               {/* Archive / Unarchive */}
                               {prod.isArchived ? (
                                 <button
-                                  onClick={() => unarchiveProduct(prod.id)}
+                                  onClick={() => setConfirmArchiveProduct({ product: prod, mode: 'unarchive' })}
                                   className="p-1.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition-colors cursor-pointer"
                                   title="Aktifkan Kembali"
                                 >
@@ -471,7 +511,7 @@ export function ProductsView() {
                                 </button>
                               ) : (
                                 <button
-                                  onClick={() => archiveProduct(prod.id)}
+                                  onClick={() => setConfirmArchiveProduct({ product: prod, mode: 'archive' })}
                                   className="p-1.5 rounded-lg bg-slate-100 text-slate-500 hover:text-rose-600 border border-slate-200 hover:bg-rose-50 transition-colors cursor-pointer"
                                   title="Arsipkan Produk"
                                 >
@@ -487,6 +527,16 @@ export function ProductsView() {
                 </tbody>
               </table>
             </div>
+
+            {/* Standard 20-row Pagination Bar */}
+            <TablePagination
+              currentPage={safeProductPage}
+              totalItems={filteredProducts.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={setProductPage}
+              itemName="produk"
+              className="rounded-b-2xl"
+            />
           </div>
         </div>
       )}
@@ -544,11 +594,8 @@ export function ProductsView() {
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={async () => {
-                        const success = await deleteCategory(cat.id);
-                        if (!success) {
-                          alert(`Kategori "${cat.name}" sedang digunakan oleh ${productCount} produk. Pindahkan atau hapus produk terlebih dahulu.`);
-                        }
+                      onClick={() => {
+                        setCategoryDeleteAction({ category: cat, count: productCount });
                       }}
                       className="p-1.5 rounded-lg bg-slate-100 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
                       title="Hapus Kategori (Jika kosong)"
@@ -562,12 +609,6 @@ export function ProductsView() {
           </div>
         </div>
       )}
-
-      {/* SUBTAB 3: RACK MANAGEMENT */}
-      {subTab === 'racks' && <RackManagementTab />}
-
-      {/* SUBTAB 4: STOCK OPNAME */}
-      {subTab === 'opname' && <StockOpnameTab />}
 
       {/* MODAL: CREATE / EDIT PRODUCT */}
       {isProductModalOpen && (
@@ -634,17 +675,13 @@ export function ProductsView() {
               </button>
               <button
                 type="button"
-                onClick={async () => {
+                onClick={() => {
                   if (!categoryNameInput.trim()) {
                     setCategoryError('Nama kategori wajib diisi');
                     return;
                   }
-                  if (editingCategory) {
-                    await updateCategory(editingCategory.id, categoryNameInput.trim());
-                  } else {
-                    await addCategory(categoryNameInput.trim());
-                  }
-                  setIsCategoryModalOpen(false);
+                  setCategoryError(null);
+                  setConfirmCategorySave(true);
                 }}
                 className="px-5 py-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-xl text-xs font-semibold shadow-sm shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer"
               >
@@ -663,6 +700,122 @@ export function ProductsView() {
             await bulkImportProducts(imported);
             setIsImportModalOpen(false);
           }}
+        />
+      )}
+
+      {/* CONFIRMATION DIALOG: ARCHIVE / RESTORE PRODUCT */}
+      {confirmArchiveProduct && (
+        <ConfirmDialog
+          isOpen={true}
+          onClose={() => setConfirmArchiveProduct(null)}
+          onConfirm={async () => {
+            if (confirmArchiveProduct.mode === 'archive') {
+              await archiveProduct(confirmArchiveProduct.product.id);
+            } else {
+              await unarchiveProduct(confirmArchiveProduct.product.id);
+            }
+            setConfirmArchiveProduct(null);
+          }}
+          title={
+            confirmArchiveProduct.mode === 'archive'
+              ? 'Arsipkan Produk?'
+              : 'Aktifkan Kembali Produk?'
+          }
+          description={
+            confirmArchiveProduct.mode === 'archive' ? (
+              <span>
+                Produk <strong>&ldquo;{confirmArchiveProduct.product.name}&rdquo;</strong> akan diarsipkan dan disembunyikan dari transaksi kasir. Data riwayat dan stok tetap aman.
+              </span>
+            ) : (
+              <span>
+                Produk <strong>&ldquo;{confirmArchiveProduct.product.name}&rdquo;</strong> akan diaktifkan kembali ke katalog aktif dan dapat dijual di kasir.
+              </span>
+            )
+          }
+          confirmText={confirmArchiveProduct.mode === 'archive' ? 'Ya, Arsipkan' : 'Ya, Aktifkan'}
+          cancelText="Batal"
+          type={confirmArchiveProduct.mode === 'archive' ? 'warning' : 'primary'}
+        />
+      )}
+
+      {/* CONFIRMATION DIALOG: DELETE CATEGORY */}
+      {categoryDeleteAction && (
+        <ConfirmDialog
+          isOpen={true}
+          onClose={() => setCategoryDeleteAction(null)}
+          onConfirm={
+            categoryDeleteAction.count === 0
+              ? async () => {
+                  await deleteCategory(categoryDeleteAction.category.id);
+                  setCategoryDeleteAction(null);
+                }
+              : undefined
+          }
+          title={
+            categoryDeleteAction.count > 0
+              ? 'Kategori Tidak Dapat Dihapus'
+              : 'Hapus Kategori?'
+          }
+          description={
+            categoryDeleteAction.count > 0 ? (
+              <span>
+                Kategori <strong>&ldquo;{categoryDeleteAction.category.name}&rdquo;</strong> saat ini masih digunakan oleh{' '}
+                <strong>{categoryDeleteAction.count} produk</strong>. Pindahkan atau hapus produk terkait terlebih dahulu sebelum menghapus kategori ini.
+              </span>
+            ) : (
+              <span>
+                Apakah Anda yakin ingin menghapus kategori <strong>&ldquo;{categoryDeleteAction.category.name}&rdquo;</strong>? Tindakan ini tidak dapat dibatalkan.
+              </span>
+            )
+          }
+          confirmText="Ya, Hapus Kategori"
+          cancelText="Batal"
+          type={categoryDeleteAction.count > 0 ? 'info' : 'danger'}
+          isAlertOnly={categoryDeleteAction.count > 0}
+        />
+      )}
+
+      {/* CONFIRMATION DIALOG: SEED DATA */}
+      {showConfirmSeed && (
+        <ConfirmDialog
+          isOpen={true}
+          onClose={() => setShowConfirmSeed(false)}
+          onConfirm={async () => {
+            setShowConfirmSeed(false);
+            await handleSeedInitialData();
+          }}
+          title="Muat Data Contoh?"
+          description="Akan menambahkan 10 produk ritel populer (Indomie, Aqua, Beras, Kopi, dsb.) beserta kategori dan penataan rak default untuk demonstrasi."
+          confirmText="Ya, Muat Data"
+          cancelText="Batal"
+          type="primary"
+        />
+      )}
+
+      {/* CONFIRMATION DIALOG: SAVE CATEGORY */}
+      {confirmCategorySave && (
+        <ConfirmDialog
+          isOpen={true}
+          onClose={() => setConfirmCategorySave(false)}
+          onConfirm={async () => {
+            if (editingCategory) {
+              await updateCategory(editingCategory.id, categoryNameInput.trim());
+            } else {
+              await addCategory(categoryNameInput.trim());
+            }
+            setConfirmCategorySave(false);
+            setIsCategoryModalOpen(false);
+          }}
+          title={editingCategory ? 'Perbarui Kategori?' : 'Simpan Kategori Baru?'}
+          description={
+            <span>
+              Apakah Anda yakin ingin {editingCategory ? 'mengubah nama kategori menjadi' : 'menambahkan kategori baru'}{' '}
+              <strong>&ldquo;{categoryNameInput.trim()}&rdquo;</strong>?
+            </span>
+          }
+          confirmText="Ya, Simpan"
+          cancelText="Batal"
+          type="primary"
         />
       )}
     </div>
@@ -702,6 +855,7 @@ function ProductFormModal({
   const [minStock, setMinStock] = useState<number | ''>(editingProduct?.minStockThreshold ?? 5);
   const [image, setImage] = useState<string | undefined>(editingProduct?.image);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [showConfirmSave, setShowConfirmSave] = useState(false);
 
   // Inline Add New Category State
   const [isAddingCategoryInline, setIsAddingCategoryInline] = useState(false);
@@ -746,7 +900,11 @@ function ProductFormModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || sellingPrice === '' || cogs === '') return;
+    setShowConfirmSave(true);
+  };
 
+  const handleExecuteSave = () => {
+    setShowConfirmSave(false);
     const matchedRack = racks.find((r) => r.id === rackId);
 
     onSave({
@@ -1149,6 +1307,25 @@ function ProductFormModal({
           subtitle="Arahkan kamera ke barcode untuk mengisi kolom secara otomatis"
         />
       )}
+
+      {/* Save Product Confirmation Dialog */}
+      {showConfirmSave && (
+        <ConfirmDialog
+          isOpen={true}
+          onClose={() => setShowConfirmSave(false)}
+          onConfirm={handleExecuteSave}
+          title={editingProduct ? 'Perbarui Data Produk?' : 'Simpan Produk Baru?'}
+          description={
+            <span>
+              Apakah Anda yakin ingin menyimpan perubahan untuk produk <strong>&ldquo;{name.trim()}&rdquo;</strong> dengan harga jual{' '}
+              <strong>{formatRupiah(Number(sellingPrice) || 0)}</strong>?
+            </span>
+          }
+          confirmText={editingProduct ? 'Ya, Perbarui' : 'Ya, Simpan'}
+          cancelText="Batal"
+          type="primary"
+        />
+      )}
     </div>
   );
 }
@@ -1163,6 +1340,7 @@ interface BulkImportModalProps {
 
 function BulkImportModal({ onClose, onImport }: BulkImportModalProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [showConfirmBulk, setShowConfirmBulk] = useState(false);
   const [parsedRows, setParsedRows] = useState<
     {
       name: string;
@@ -1440,9 +1618,7 @@ function BulkImportModal({ onClose, onImport }: BulkImportModalProps) {
                 <button
                   type="button"
                   disabled={validRows.length === 0}
-                  onClick={() => {
-                    onImport(validRows.map(({ errors, ...rest }) => rest));
-                  }}
+                  onClick={() => setShowConfirmBulk(true)}
                   className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-40 shadow-sm shadow-teal-600/20 transition-all"
                 >
                   Konfirmasi Import ({validRows.length} Produk)
@@ -1450,6 +1626,115 @@ function BulkImportModal({ onClose, onImport }: BulkImportModalProps) {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Bulk Import Confirmation Dialog */}
+      {showConfirmBulk && (
+        <ConfirmDialog
+          isOpen={true}
+          onClose={() => setShowConfirmBulk(false)}
+          onConfirm={() => {
+            setShowConfirmBulk(false);
+            onImport(validRows.map(({ errors, ...rest }) => rest));
+          }}
+          title="Import Produk ke Katalog?"
+          description={
+            <span>
+              Apakah Anda yakin ingin mengimpor <strong>{validRows.length} produk</strong> ke katalog sistem? Produk yang sudah ada dengan nama yang sama akan diabaikan/diperbarui.
+            </span>
+          }
+          confirmText="Ya, Import Sekarang"
+          cancelText="Batal"
+          type="primary"
+        />
+      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------------
+// REUSABLE CONFIRMATION DIALOG MODAL COMPONENT
+// ----------------------------------------------------
+interface ConfirmDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm?: () => void;
+  title: string;
+  description: React.ReactNode;
+  confirmText?: string;
+  cancelText?: string;
+  type?: 'danger' | 'warning' | 'primary' | 'info';
+  isAlertOnly?: boolean;
+}
+
+function ConfirmDialog({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  description,
+  confirmText = 'Konfirmasi',
+  cancelText = 'Batal',
+  type = 'primary',
+  isAlertOnly = false,
+}: ConfirmDialogProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+        <div className="flex items-start space-x-3.5">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              type === 'danger'
+                ? 'bg-rose-100 text-rose-600'
+                : type === 'warning'
+                ? 'bg-amber-100 text-amber-700'
+                : type === 'info'
+                ? 'bg-sky-100 text-sky-700'
+                : 'bg-teal-100 text-teal-700'
+            }`}
+          >
+            {type === 'danger' && <Trash2 className="w-5 h-5" />}
+            {type === 'warning' && <AlertTriangle className="w-5 h-5" />}
+            {type === 'info' && <AlertTriangle className="w-5 h-5" />}
+            {type === 'primary' && <CheckCircle2 className="w-5 h-5" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-bold text-slate-900 leading-snug">{title}</h4>
+            <div className="text-xs text-slate-600 mt-1.5 leading-relaxed">{description}</div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+          {!isAlertOnly && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+            >
+              {cancelText}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (onConfirm) onConfirm();
+              onClose();
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer ${
+              type === 'danger'
+                ? 'bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white'
+                : type === 'warning'
+                ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white'
+                : isAlertOnly
+                ? 'bg-slate-800 hover:bg-slate-900 text-white'
+                : 'bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white shadow-teal-600/20'
+            }`}
+          >
+            {isAlertOnly ? 'Mengerti' : confirmText}
+          </button>
         </div>
       </div>
     </div>

@@ -362,6 +362,105 @@ create policy "Users can update own costs"
   on public.costs for update
   using (auth.uid() = user_id);
 
-create policy "Users can delete own costs"
-  on public.costs for delete
+-- ------------------------------------------------------------------------------
+-- 10. BRANCHES TABLE
+-- ------------------------------------------------------------------------------
+create table if not exists public.branches (
+  id text primary key default uuid_generate_v4()::text,
+  user_id uuid references auth.users on delete cascade not null,
+  name text not null,
+  code text not null,
+  address text default '',
+  phone text default '',
+  status text not null default 'Active' check (status in ('Active', 'Inactive')),
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  updated_at timestamptz not null default timezone('utc'::text, now())
+);
+
+alter table public.branches enable row level security;
+
+create policy "Users can view own branches"
+  on public.branches for select
   using (auth.uid() = user_id);
+
+create policy "Users can insert own branches"
+  on public.branches for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update own branches"
+  on public.branches for update
+  using (auth.uid() = user_id);
+
+create policy "Users can delete own branches"
+  on public.branches for delete
+  using (auth.uid() = user_id);
+
+-- ------------------------------------------------------------------------------
+-- 11. PRODUCT INVENTORIES (BRANCH-SPECIFIC STOCK)
+-- ------------------------------------------------------------------------------
+create table if not exists public.product_inventories (
+  id text primary key default uuid_generate_v4()::text,
+  user_id uuid references auth.users on delete cascade not null,
+  product_id text references public.products(id) on delete cascade not null,
+  branch_id text references public.branches(id) on delete cascade not null,
+  stock integer not null default 0,
+  rack_id text,
+  rack_name text,
+  updated_at timestamptz not null default timezone('utc'::text, now()),
+  unique(product_id, branch_id)
+);
+
+alter table public.product_inventories enable row level security;
+
+create policy "Users can view own product inventories"
+  on public.product_inventories for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert own product inventories"
+  on public.product_inventories for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update own product inventories"
+  on public.product_inventories for update
+  using (auth.uid() = user_id);
+
+create policy "Users can delete own product inventories"
+  on public.product_inventories for delete
+  using (auth.uid() = user_id);
+
+-- ------------------------------------------------------------------------------
+-- 12. USER BRANCH ACCESS TABLE
+-- ------------------------------------------------------------------------------
+create table if not exists public.user_branch_access (
+  id text primary key default uuid_generate_v4()::text,
+  user_id uuid references auth.users on delete cascade not null,
+  app_user_id text not null,
+  branch_id text not null,
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  unique(app_user_id, branch_id)
+);
+
+alter table public.user_branch_access enable row level security;
+
+create policy "Users can view own user branch access"
+  on public.user_branch_access for select
+  using (auth.uid() = user_id);
+
+create policy "Users can modify own user branch access"
+  on public.user_branch_access for all
+  using (auth.uid() = user_id);
+
+-- ------------------------------------------------------------------------------
+-- 13. ALTER EXISTING TABLES TO INCLUDE branch_id
+-- ------------------------------------------------------------------------------
+alter table public.orders add column if not exists branch_id text;
+alter table public.orders add column if not exists branch_name text;
+
+alter table public.restocks add column if not exists branch_id text;
+alter table public.restocks add column if not exists branch_name text;
+
+alter table public.revenues add column if not exists branch_id text;
+alter table public.revenues add column if not exists branch_name text;
+
+alter table public.costs add column if not exists branch_id text;
+alter table public.costs add column if not exists branch_name text;

@@ -18,6 +18,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 export function RackManagementTab() {
   const { racks, products, addRack, updateRack, deleteRack } = useApp();
@@ -26,6 +27,7 @@ export function RackManagementTab() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRack, setEditingRack] = useState<Rack | null>(null);
   const [selectedRackForProducts, setSelectedRackForProducts] = useState<Rack | null>(null);
+  const [confirmDeleteRack, setConfirmDeleteRack] = useState<Rack | null>(null);
 
   // Form states
   const [code, setCode] = useState('');
@@ -116,16 +118,8 @@ export function RackManagementTab() {
     }
   };
 
-  const handleDelete = async (rack: Rack) => {
-    const assignedCount = rackProductsMap.get(rack.id)?.length || 0;
-    const confirmMsg = assignedCount > 0
-      ? `Hapus rak "${rack.code} - ${rack.name}"? ${assignedCount} produk yang terhubung akan dilepas dari rak ini.`
-      : `Hapus rak "${rack.code} - ${rack.name}"?`;
-
-    if (confirm(confirmMsg)) {
-      await deleteRack(rack.id);
-      showToast(`Rak ${rack.code} berhasil dihapus.`);
-    }
+  const handleDelete = (rack: Rack) => {
+    setConfirmDeleteRack(rack);
   };
 
   return (
@@ -413,6 +407,34 @@ export function RackManagementTab() {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Rack Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(confirmDeleteRack)}
+        onClose={() => setConfirmDeleteRack(null)}
+        onConfirm={async () => {
+          if (confirmDeleteRack) {
+            await deleteRack(confirmDeleteRack.id);
+            showToast(`Rak ${confirmDeleteRack.code} berhasil dihapus.`);
+            setConfirmDeleteRack(null);
+          }
+        }}
+        type="danger"
+        title={`Hapus Rak ${confirmDeleteRack?.code}?`}
+        description={
+          confirmDeleteRack && (rackProductsMap.get(confirmDeleteRack.id)?.length || 0) > 0 ? (
+            <span>
+              Apakah Anda yakin ingin menghapus rak <strong>{confirmDeleteRack.code} - {confirmDeleteRack.name}</strong>? Sebanyak <strong>{rackProductsMap.get(confirmDeleteRack.id)?.length} produk</strong> yang terhubung akan dilepaskan dari rak ini.
+            </span>
+          ) : (
+            <span>
+              Apakah Anda yakin ingin menghapus rak <strong>{confirmDeleteRack?.code} - {confirmDeleteRack?.name}</strong>?
+            </span>
+          )
+        }
+        confirmText="Hapus Rak"
+        cancelText="Batal"
+      />
     </div>
   );
 }

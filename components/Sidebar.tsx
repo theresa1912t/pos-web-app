@@ -19,6 +19,8 @@ import {
   UserCheck,
   Users,
   Shield,
+  Building2,
+  Boxes,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -79,14 +81,26 @@ export function Sidebar({ isMobileDrawer = false }: SidebarProps) {
       id: 'products' as const,
       label: 'Produk',
       icon: Package,
-      badge: lowStockCount > 0 ? lowStockCount : undefined,
       visible: hasPermission('products', 'view'),
+    },
+    {
+      id: 'inventory' as const,
+      label: 'Inventaris',
+      icon: Boxes,
+      badge: lowStockCount > 0 ? lowStockCount : undefined,
+      visible: hasPermission('inventory', 'view') || hasPermission('stock_opname', 'view') || hasPermission('racks', 'view'),
     },
     {
       id: 'finance' as const,
       label: 'Keuangan',
       icon: TrendingUp,
       visible: hasPermission('finance', 'view'),
+    },
+    {
+      id: 'branches' as const,
+      label: 'Cabang',
+      icon: Building2,
+      visible: hasPermission('branches', 'view'),
     },
     {
       id: 'perangkat_kasir' as const,

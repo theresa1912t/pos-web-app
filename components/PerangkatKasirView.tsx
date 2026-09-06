@@ -15,31 +15,37 @@ import {
   AlertCircle,
   Save,
   Volume2,
-  Sparkles,
   ToggleLeft,
   ToggleRight,
-  RefreshCw,
   Zap,
   Info,
   Check,
   Usb,
-  Radio,
-  FileText,
   SlidersHorizontal,
+  Smartphone,
+  Layers,
+  HelpCircle,
 } from 'lucide-react';
 
 const COMMON_PRINTER_MODELS = [
-  { id: 'pos58_usb', name: 'POS-58 Thermal Printer (USB/Bluetooth)', paper: '58mm', type: 'Thermal 58mm' },
-  { id: 'pos80_lan', name: 'POS-80 LAN/Network Thermal High-Speed', paper: '80mm', type: 'Thermal 80mm' },
-  { id: 'epson_tmt82', name: 'Epson TM-T82 ESC/POS Series', paper: '80mm', type: 'Thermal 80mm' },
-  { id: 'zjiang_58', name: 'Zjiang ZJ-5890K USB Thermal Printer', paper: '58mm', type: 'Thermal 58mm' },
-  { id: 'panda_bt', name: 'Panda Mobile Bluetooth Receipt Printer', paper: '58mm', type: 'Portable BT' },
+  { id: 'pos58_usb', name: 'POS-58 Thermal Printer (USB/Bluetooth)', paper: '58mm', type: 'Thermal 58mm Standard' },
+  { id: 'panda_bt', name: 'Panda PRJ-58D Bluetooth Mini', paper: '58mm', type: 'Portable BT 58mm' },
+  { id: 'epson_tmt82', name: 'Epson TM-T82 ESC/POS Series', paper: '80mm', type: 'Thermal 80mm High-Speed' },
+  { id: 'pos80_lan', name: 'POS-80 LAN/Network Thermal High-Speed', paper: '80mm', type: 'Thermal 80mm Network' },
+  { id: 'zjiang_58', name: 'Zjiang ZJ-5890K USB Thermal Printer', paper: '58mm', type: 'Thermal 58mm Desktop' },
+  { id: 'custom', name: 'Lainnya / Model Custom Driver', paper: '58mm', type: 'Ketik nama driver printer sendiri' },
 ];
 
 export function PerangkatKasirView() {
   const { settings, updateSettings, products } = useApp();
 
-  // Hardware State
+  // Printer State
+  const initialPreset = COMMON_PRINTER_MODELS.find(
+    (p) => p.id !== 'custom' && p.name === settings.printerName
+  );
+  const [selectedPrinterModelId, setSelectedPrinterModelId] = useState<string>(
+    initialPreset ? initialPreset.id : (settings.printerName ? 'custom' : 'pos58_usb')
+  );
   const [printerConnected, setPrinterConnected] = useState<boolean>(settings.printerConnected ?? true);
   const [printerName, setPrinterName] = useState<string>(
     settings.printerName || 'POS-58 Thermal Printer (USB/Bluetooth)'
@@ -51,6 +57,7 @@ export function PerangkatKasirView() {
     settings.autoPrintReceipt ?? false
   );
 
+  // Cash Drawer State
   const [cashDrawerConnected, setCashDrawerConnected] = useState<boolean>(
     settings.cashDrawerConnected ?? true
   );
@@ -64,6 +71,7 @@ export function PerangkatKasirView() {
     'printer_kick' | 'serial_usb' | 'local_bridge' | 'simulated'
   >(settings.cashDrawerInterface || 'printer_kick');
 
+  // Barcode Scanner State
   const [barcodeScannerConnected, setBarcodeScannerConnected] = useState<boolean>(
     settings.barcodeScannerConnected ?? true
   );
@@ -98,11 +106,30 @@ export function PerangkatKasirView() {
     }, 4000);
   };
 
+  const handleSelectPrinterModel = (modelId: string) => {
+    setSelectedPrinterModelId(modelId);
+    const preset = COMMON_PRINTER_MODELS.find((p) => p.id === modelId);
+    if (preset && preset.id !== 'custom') {
+      setPrinterName(preset.name);
+      setPrinterPaperSize(preset.paper as '58mm' | '80mm');
+      showToast(`Model printer dipilih: "${preset.name}".`, 'info');
+    } else if (modelId === 'custom') {
+      if (COMMON_PRINTER_MODELS.some((p) => p.id !== 'custom' && p.name === printerName)) {
+        setPrinterName('');
+      }
+    }
+  };
+
   const handleSaveHardware = async () => {
     setIsSaving(true);
+    const finalPrinterName =
+      selectedPrinterModelId === 'custom'
+        ? (printerName.trim() || 'Custom Thermal Printer')
+        : (COMMON_PRINTER_MODELS.find((p) => p.id === selectedPrinterModelId)?.name || printerName.trim());
+
     await updateSettings({
       printerConnected,
-      printerName: printerName.trim(),
+      printerName: finalPrinterName,
       printerPaperSize,
       autoPrintReceipt,
       cashDrawerName: cashDrawerName.trim(),
@@ -114,7 +141,7 @@ export function PerangkatKasirView() {
     });
     setIsSaving(false);
     setSaveSuccess(true);
-    showToast('Konfigurasi perangkat kasir POS berhasil disimpan ke sistem!', 'success');
+    showToast('Konfigurasi perangkat kasir POS berhasil disimpan!', 'success');
     setTimeout(() => setSaveSuccess(false), 3000);
   };
 
@@ -135,7 +162,7 @@ export function PerangkatKasirView() {
 
   const handleTestCashDrawer = async () => {
     if (!cashDrawerConnected) {
-      showToast('Laci kasir terputus. Pastikan port RJ11 terhubung.', 'error');
+      showToast('Laci kasir terputus. Pastikan koneksi port RJ11 terhubung.', 'error');
       return;
     }
     setIsKickingDrawer(true);
@@ -174,46 +201,8 @@ export function PerangkatKasirView() {
     showToast(`Barcode "${clean}" terdeteksi dan berhasil dipindai!`, 'success');
   };
 
-  const handleSelectPresetPrinter = (preset: (typeof COMMON_PRINTER_MODELS)[0]) => {
-    setPrinterName(preset.name);
-    setPrinterPaperSize(preset.paper as '58mm' | '80mm');
-    showToast(`Model printer diubah ke "${preset.name}".`, 'info');
-  };
-
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-16">
-      {/* Top Banner Overview Header */}
-      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3.5">
-          <div className="w-12 h-12 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 shadow-xs">
-            <Printer className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-slate-900">Perangkat Kasir (POS Hardware)</h2>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                Live Integration
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Konfigurasi perangkat fisik: printer thermal struk, laci uang kasir RJ11, dan pemindai barcode
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            type="button"
-            onClick={handleSaveHardware}
-            disabled={isSaving}
-            className="flex items-center space-x-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-xl font-semibold text-xs shadow-md shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
-          >
-            <Save className="w-4 h-4" />
-            <span>{isSaving ? 'Menyimpan...' : 'Simpan Semua Pengaturan'}</span>
-          </button>
-        </div>
-      </div>
-
       {/* Global Toast Alert */}
       {hardwareToast && (
         <div
@@ -267,8 +256,8 @@ export function PerangkatKasirView() {
               {printerConnected ? 'Online' : 'Offline'}
             </span>
           </div>
-          <div className="text-[11px] text-slate-600 truncate bg-slate-50 p-2 rounded-lg border border-slate-100">
-            {printerName}
+          <div className="text-[11px] text-slate-600 truncate bg-slate-50 p-2 rounded-lg border border-slate-100 font-medium">
+            {printerName || 'Model Kustom'}
           </div>
         </div>
 
@@ -294,7 +283,7 @@ export function PerangkatKasirView() {
               {cashDrawerConnected ? 'Siap (Ready)' : 'Non-aktif'}
             </span>
           </div>
-          <div className="text-[11px] text-slate-600 truncate bg-slate-50 p-2 rounded-lg border border-slate-100">
+          <div className="text-[11px] text-slate-600 truncate bg-slate-50 p-2 rounded-lg border border-slate-100 font-medium">
             {autoOpenCashDrawer ? '✓ Buka Otomatis Saat Tunai' : 'Mode Buka Manual'}
           </div>
         </div>
@@ -308,7 +297,7 @@ export function PerangkatKasirView() {
               </div>
               <div>
                 <h3 className="text-xs font-bold text-slate-900">Pemindai Barcode</h3>
-                <span className="text-[10px] text-slate-500">USB HID / BT</span>
+                <span className="text-[10px] text-slate-500">Multi-Scanner HID</span>
               </div>
             </div>
             <span
@@ -321,7 +310,7 @@ export function PerangkatKasirView() {
               {barcodeScannerConnected ? 'Plug & Play' : 'Non-aktif'}
             </span>
           </div>
-          <div className="text-[11px] text-slate-600 truncate bg-slate-50 p-2 rounded-lg border border-slate-100">
+          <div className="text-[11px] text-slate-600 truncate bg-slate-50 p-2 rounded-lg border border-slate-100 font-medium">
             {barcodeScannerName}
           </div>
         </div>
@@ -339,7 +328,7 @@ export function PerangkatKasirView() {
             <div>
               <h3 className="text-sm font-bold text-slate-900">1. Printer Struk (Receipt Printer)</h3>
               <p className="text-[11px] text-slate-500">
-                Pilih model printer thermal kasir, atur ukuran kertas, dan uji cetak struk
+                Pilih model printer thermal kasir, atur ukuran kertas struk, dan lakukan tes cetak
               </p>
             </div>
           </div>
@@ -362,71 +351,66 @@ export function PerangkatKasirView() {
           </div>
         </div>
 
-        {/* Change Printer / Quick Presets */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-teal-600" />
-            <span>Pilih Model Printer Populer (Change Printer)</span>
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {COMMON_PRINTER_MODELS.map((preset) => {
-              const isSelected = printerName === preset.name && printerPaperSize === preset.paper;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handleSelectPresetPrinter(preset)}
-                  className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer flex flex-col justify-between ${
-                    isSelected
-                      ? 'bg-teal-50 border-teal-300 text-teal-900 font-semibold ring-1 ring-teal-400/50'
-                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-1">
-                    <span className="truncate">{preset.name}</span>
-                    {isSelected && <Check className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />}
-                  </div>
-                  <span className="text-[10px] text-slate-500 mt-1">{preset.type}</span>
-                </button>
-              );
-            })}
+        {/* Consolidated Model & Paper Selection */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label className="block text-slate-700 font-medium mb-1.5 flex items-center gap-1.5">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-teal-600" />
+              <span>Pilih Model / Driver Printer</span>
+            </label>
+            <select
+              value={selectedPrinterModelId}
+              onChange={(e) => handleSelectPrinterModel(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+            >
+              {COMMON_PRINTER_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({m.paper})
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
 
-        {/* Manual Device Name & Paper Size inputs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-1">
           <div>
             <label className="block text-slate-700 font-medium mb-1.5">
-              Nama Perangkat Printer (Custom Model)
+              Ukuran Lebar Kertas Struk
             </label>
-            <input
-              type="text"
-              value={printerName}
-              onChange={(e) => setPrinterName(e.target.value)}
-              placeholder="Contoh: POS-58 Thermal Printer (USB/Bluetooth)"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-700 font-medium mb-1.5">Ukuran Lebar Kertas Struk</label>
             <select
               value={printerPaperSize}
               onChange={(e) => setPrinterPaperSize(e.target.value as '58mm' | '80mm')}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
             >
-              <option value="58mm">58mm (Standar Kertas Thermal POS Warung)</option>
-              <option value="80mm">80mm (Kertas Thermal Lebar Resto / Supermarket)</option>
+              <option value="58mm">58mm (Standar Thermal Kasir Warung / Minimarket)</option>
+              <option value="80mm">80mm (Thermal Lebar Resto / Supermarket)</option>
             </select>
           </div>
         </div>
+
+        {/* Custom Printer Name Input (Only appears when Custom Model is selected) */}
+        {selectedPrinterModelId === 'custom' && (
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5 animate-in fade-in">
+            <label className="block text-slate-700 font-semibold">
+              Nama Driver / Perangkat Printer Kustom
+            </label>
+            <input
+              type="text"
+              value={printerName}
+              onChange={(e) => setPrinterName(e.target.value)}
+              placeholder="Contoh: Xprinter XP-58IIH / Iware POS-58..."
+              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-500 transition-colors"
+            />
+            <p className="text-[11px] text-slate-500">
+              Masukkan nama printer sesuai dengan driver printer yang terpasang pada komputer atau nama Bluetooth perangkat.
+            </p>
+          </div>
+        )}
 
         {/* Auto Print Receipt Toggle Option */}
         <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
           <div>
             <div className="font-semibold text-slate-800">Cetak Struk Otomatis (Auto Print Receipt)</div>
             <div className="text-[11px] text-slate-500 mt-0.5">
-              Secara otomatis mengirim perintah cetak struk segera setelah kasir menyelesaikan transaksi
+              Secara otomatis mencetak struk segera setelah kasir menekan tombol selesai transaksi
             </div>
           </div>
           <button
@@ -447,7 +431,7 @@ export function PerangkatKasirView() {
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
           <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
             <Info className="w-3.5 h-3.5 text-slate-400" />
-            <span>Mendukung ESC/POS thermal printer via USB, Bluetooth, atau LAN.</span>
+            <span>Mendukung protokol standar ESC/POS thermal printer via USB, Bluetooth, atau LAN.</span>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -476,7 +460,7 @@ export function PerangkatKasirView() {
             <div>
               <h3 className="text-sm font-bold text-slate-900">2. Laci Kasir (Cash Drawer)</h3>
               <p className="text-[11px] text-slate-500">
-                Koneksi pembuka laci uang fisik melalui sinyal pulsa RJ11 printer struk
+                Pemicu buka laci uang fisik melalui pulsa port RJ11 di belakang printer struk
               </p>
             </div>
           </div>
@@ -487,13 +471,32 @@ export function PerangkatKasirView() {
                 : 'bg-slate-100 text-slate-600 border-slate-200'
             }`}
           >
-            {cashDrawerConnected ? 'Port RJ11 Terhubung' : 'Terputus (Disconnected)'}
+            {cashDrawerConnected ? 'Port RJ11 Siap' : 'Terputus (Disconnected)'}
           </span>
+        </div>
+
+        {/* Clear Hardware Operational Explanation */}
+        <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-xl text-xs text-teal-900 space-y-2">
+          <div className="font-bold flex items-center gap-1.5">
+            <Zap className="w-4 h-4 text-teal-600" />
+            <span>Cara Kerja Fisik & Konfigurasi Station Kasir:</span>
+          </div>
+          <ul className="text-[11px] text-teal-800/90 leading-relaxed space-y-1 list-disc list-inside">
+            <li>
+              <strong>1 Stasiun Kasir = 1 Device + 1 Printer + 1 Laci Kasir</strong>: Setiap meja kasir memiliki 1 komputer/tablet yang terhubung ke 1 printer struk dan 1 laci uang untuk akuntabilitas shift kasir.
+            </li>
+            <li>
+              <strong>Koneksi Port RJ11</strong>: Kabel telepon RJ11 dari laci kasir dicolokkan ke port bertuliskan <strong>DK (Drawer Kick)</strong> di belakang printer struk thermal.
+            </li>
+            <li>
+              <strong>Otomasi Transaksi Tunai</strong>: Saat transaksi metode <strong>Tunai (Cash)</strong> diselesaikan, aplikasi mengirimkan pulsa elektrik 12V/24V via printer untuk melepaskan kunci solenoid laci kasir secara otomatis tanpa perlu kunci manual.
+            </li>
+          </ul>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
           <div>
-            <label className="block text-slate-700 font-medium mb-1.5">Nama / Tipe Laci Kasir</label>
+            <label className="block text-slate-700 font-medium mb-1.5">Tipe Laci Kasir</label>
             <input
               type="text"
               value={cashDrawerName}
@@ -504,33 +507,12 @@ export function PerangkatKasirView() {
           </div>
 
           <div>
-            <label className="block text-slate-700 font-medium mb-1.5">Metode Sinyal Pemicu (Interface)</label>
-            <select
-              value={cashDrawerInterface}
-              onChange={(e) =>
-                setCashDrawerInterface(
-                  e.target.value as 'printer_kick' | 'serial_usb' | 'local_bridge' | 'simulated'
-                )
-              }
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-            >
-              <option value="printer_kick">Port RJ11/RJ12 Printer Struk (Standar Industri ESC/POS Kick)</option>
-              <option value="serial_usb">Web Serial Direct USB Relay</option>
-              <option value="local_bridge">Local Hardware Bridge Agent</option>
-              <option value="simulated">Simulasi Virtual (Demo / Testing)</option>
-            </select>
+            <label className="block text-slate-700 font-medium mb-1.5">Metode Pemicu Sinyal</label>
+            <div className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 flex items-center justify-between">
+              <span>Port RJ11 / RJ12 Printer Struk (Standar Industri ESC/POS)</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            </div>
           </div>
-        </div>
-
-        {/* Connection Information Banner */}
-        <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-xl text-xs text-teal-900 space-y-1.5">
-          <div className="font-bold flex items-center gap-1.5">
-            <Zap className="w-4 h-4 text-teal-600" />
-            <span>Informasi Koneksi Laci Kasir (Hardware Connection Info)</span>
-          </div>
-          <p className="text-teal-800/90 leading-relaxed text-[11px]">
-            Kabel RJ11/RJ12 dari laci kasir dicolokkan ke port <span className="font-semibold font-mono">DK (Drawer Kick)</span> di belakang printer thermal. Saat transaksi Tunai selesai dicatat, sistem mengirimkan pulsa elektrik pembuka laci otomatis tanpa kasir harus memasukkan perintah atau kode ESC/POS manual.
-          </p>
         </div>
 
         {/* Auto Open Cash Drawer Toggle */}
@@ -540,7 +522,7 @@ export function PerangkatKasirView() {
               Buka Otomatis Saat Transaksi Tunai (Auto Open Cash Drawer)
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">
-              Memicu laci kasir terbuka otomatis segera setelah kasir memproses pembayaran metode Tunai (Cash)
+              Memicu laci kasir terbuka secara otomatis ketika kasir menerima pembayaran metode Tunai (Cash)
             </div>
           </div>
           <button
@@ -578,7 +560,7 @@ export function PerangkatKasirView() {
             className="flex items-center space-x-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-semibold text-xs shadow-sm transition-all cursor-pointer disabled:opacity-50"
           >
             <Vault className="w-4 h-4" />
-            <span>{isKickingDrawer ? 'Membuka Laci...' : 'Buka Laci Kasir (Test Drawer)'}</span>
+            <span>{isKickingDrawer ? 'Membuka Laci...' : 'Buka Laci Kasir (Test Pulsa RJ11)'}</span>
           </button>
         </div>
       </div>
@@ -595,13 +577,42 @@ export function PerangkatKasirView() {
             <div>
               <h3 className="text-sm font-bold text-slate-900">3. Pemindai Barcode (Barcode Scanner)</h3>
               <p className="text-[11px] text-slate-500">
-                Integrasi pemindai barcode USB/Bluetooth HID Keyboard Wedge dan kamera
+                Mendukung banyak scanner USB/Bluetooth HID Keyboard & kamera HP untuk stock opname
               </p>
             </div>
           </div>
           <span className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-            Plug & Play Aktif (HID Ready)
+            Plug & Play Aktif (HID Keyboard)
           </span>
+        </div>
+
+        {/* Multi-Scanner & Contextual Usage Explanation */}
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 space-y-2">
+          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+            <Info className="w-4 h-4 text-teal-600" />
+            <span>Dukungan Multi-Scanner & Fleksibilitas Stock Opname:</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] text-slate-600 leading-relaxed pt-1">
+            <div className="p-3 bg-white rounded-lg border border-slate-200/80 space-y-1">
+              <div className="font-semibold text-slate-800 flex items-center gap-1">
+                <Usb className="w-3.5 h-3.5 text-teal-600" />
+                <span>Bisa Terhubung Lebih dari 1 Scanner</span>
+              </div>
+              <p>
+                Sistem operasi mengenali scanner sebagai perangkat keyboard (HID). Anda dapat memasang <strong>scanner duduk omni di meja kasir</strong> sekaligus <strong>wireless gun scanner</strong> untuk barang-barang besar tanpa konflik driver.
+              </p>
+            </div>
+
+            <div className="p-3 bg-white rounded-lg border border-slate-200/80 space-y-1">
+              <div className="font-semibold text-slate-800 flex items-center gap-1">
+                <Smartphone className="w-3.5 h-3.5 text-teal-600" />
+                <span>Stock Opname Gudang dengan HP / Tablet</span>
+              </div>
+              <p>
+                Untuk opname di lorong rak gudang, staf tidak perlu membawa PC kasir. Cukup buka sistem melalui <strong>browser HP / Tablet</strong> dan gunakan <strong>fitur pemindai kamera bawaan</strong> di menu Stock Opname.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -619,21 +630,10 @@ export function PerangkatKasirView() {
           <div>
             <label className="block text-slate-700 font-medium mb-1.5">Mode Koneksi Scanner</label>
             <div className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 flex items-center justify-between">
-              <span>USB HID / Bluetooth Keyboard Wedge</span>
+              <span>Universal USB HID / Bluetooth Keyboard Wedge</span>
               <Usb className="w-3.5 h-3.5 text-slate-500" />
             </div>
           </div>
-        </div>
-
-        {/* Scanner Information Note */}
-        <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 space-y-1">
-          <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-            <Info className="w-3.5 h-3.5 text-teal-600" />
-            <span>Informasi Scanner Barcode</span>
-          </div>
-          <p className="text-[11px] leading-relaxed text-slate-500">
-            Pemindai barcode laser atau omni 2D bekerja secara plug-and-play sebagai keyboard emulation. Arahkan kursor ke kolom pencarian kasir, lalu tembak barcode produk untuk input otomatis.
-          </p>
         </div>
 
         {/* Interactive Barcode Test Console */}
@@ -643,7 +643,7 @@ export function PerangkatKasirView() {
               <Volume2 className="w-4 h-4 text-teal-600" />
               <span>Uji Coba Pemindaian Barcode (Test Scanner)</span>
             </span>
-            <span className="text-[11px] text-slate-500">Tembak barcode fisik atau ketik kode</span>
+            <span className="text-[11px] text-slate-500">Tembak barcode fisik atau ketik angka barcode</span>
           </div>
 
           <form onSubmit={handleTestBarcodeScan} className="flex items-center space-x-2">
@@ -702,7 +702,7 @@ export function PerangkatKasirView() {
           className="flex items-center space-x-2 px-7 py-3 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-xl font-bold text-xs shadow-md shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
         >
           <Save className="w-4 h-4" />
-          <span>{isSaving ? 'Menyimpan Konfigurasi...' : 'Simpan Konfigurasi Perangkat Kasir'}</span>
+          <span>{isSaving ? 'Menyimpan Konfigurasi...' : 'Simpan Semua Pengaturan Perangkat Kasir'}</span>
         </button>
       </div>
     </div>

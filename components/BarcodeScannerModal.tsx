@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { useApp } from '@/context/AppContext';
 import {
   X,
   Camera,
@@ -14,6 +15,7 @@ import {
   Barcode,
   Volume2,
   VolumeX,
+  Sparkles,
 } from 'lucide-react';
 
 interface BarcodeScannerModalProps {
@@ -55,6 +57,7 @@ export function BarcodeScannerModal({
   title = 'Scan Barcode Produk',
   subtitle = 'Arahkan kamera ke barcode 1D atau QR Code pada kemasan produk',
 }: BarcodeScannerModalProps) {
+  const { products } = useApp();
   const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -70,6 +73,30 @@ export function BarcodeScannerModal({
   const isStoppingRef = useRef(false);
   const containerId = 'interactive-barcode-reader';
   const lastScanTimestamp = useRef<number>(0);
+
+  // Sample barcodes for quick testing or when hardware camera is not connected
+  const sampleBarcodes = useMemo(() => {
+    const fromProducts = products
+      .filter((p) => Boolean(p.barcode) && !p.isArchived)
+      .map((p) => ({ name: p.name, barcode: p.barcode! }));
+
+    const defaults = [
+      { name: 'Indomie Goreng', barcode: '8992388101015' },
+      { name: 'Aqua 600ml', barcode: '8998866200223' },
+      { name: 'Teh Botol Sosro', barcode: '8992761111006' },
+      { name: 'Kopi Kapal Api', barcode: '8991001112233' },
+    ];
+
+    const combined = [...fromProducts, ...defaults];
+    const unique = new Map<string, { name: string; barcode: string }>();
+    combined.forEach((item) => {
+      if (!unique.has(item.barcode)) {
+        unique.set(item.barcode, item);
+      }
+    });
+
+    return Array.from(unique.values()).slice(0, 5);
+  }, [products]);
 
   // Stop scanner safely
   const stopScanner = useCallback(async () => {
@@ -110,14 +137,13 @@ export function BarcodeScannerModal({
     [lastScannedCode, soundEnabled, onScanSuccess]
   );
 
-  // Initialize and start scanner
+  // Initialize and start scanner with graceful fallback cascade
   const startScanner = useCallback(
     async (cameraId?: string) => {
       setCameraError(null);
       await stopScanner();
 
       try {
-        // Formats to support: all standard retail 1D barcodes and 2D codes
         const formatsToSupport = [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
@@ -129,38 +155,65 @@ export function BarcodeScannerModal({
           Html5QrcodeSupportedFormats.ITF,
         ];
 
+        const containerEl = document.getElementById(containerId);
+        if (!containerEl) return;
+
         const html5QrCode = new Html5Qrcode(containerId, {
           formatsToSupport,
           verbose: false,
         });
         scannerRef.current = html5QrCode;
 
-        // Camera config
-        const cameraConfig = cameraId
-          ? { deviceId: { exact: cameraId } }
-          : { facingMode: 'environment' };
-
         const config = {
           fps: 15,
           qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
             const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
             const qrboxWidth = Math.floor(minEdge * 0.82);
-            const qrboxHeight = Math.floor(minEdge * 0.45); // Rectangular window suited for 1D barcodes
+            const qrboxHeight = Math.floor(minEdge * 0.45);
             return { width: Math.max(qrboxWidth, 220), height: Math.max(qrboxHeight, 130) };
           },
           aspectRatio: 1.333334,
         };
 
-        await html5QrCode.start(
-          cameraConfig,
-          config,
-          (decodedText) => {
-            handleDecodedText(decodedText);
-          },
-          () => {
-            // Frame scan failure is expected when no barcode in view, ignore
+        // Fallback sequence: specified camera -> environment camera -> user camera -> unconstrained
+        const attempts = cameraId
+          ? [{ deviceId: { exact: cameraId } }, { facingMode: 'environment' }, { facingMode: 'user' }]
+          : [{ facingMode: 'environment' }, { facingMode: 'user' }, {} as any];
+
+        let started = false;
+        let lastErr: any = null;
+
+        for (const cameraConfig of attempts) {
+          try {
+            await html5QrCode.start(
+              cameraConfig,
+              config,
+              (decodedText) => {
+                handleDecodedText(decodedText);
+              },
+              () => {
+                // Frame scan failure is expected when no barcode in view
+              }
+            );
+            started = true;
+            break;
+          } catch (attemptErr: any) {
+            lastErr = attemptErr;
+            const errStr = String(attemptErr?.message || attemptErr || '');
+            if (
+              attemptErr?.name === 'NotAllowedError' ||
+              errStr.includes('Permission') ||
+              errStr.includes('denied')
+            ) {
+              // User or browser explicitly denied camera permissions
+              break;
+            }
           }
-        );
+        }
+
+        if (!started) {
+          throw lastErr || new Error('Kamera tidak dapat dimulai.');
+        }
 
         setIsScanning(true);
 
@@ -176,12 +229,18 @@ export function BarcodeScannerModal({
           setTorchSupported(false);
         }
       } catch (err: any) {
-        console.error('Camera start failure:', err);
+        // Use console.warn to log without triggering unhandled error telemetry
+        console.warn('Camera start issue (switching to manual/sample mode):', err?.message || err);
         let msg = 'Tidak dapat mengakses kamera perangkat.';
-        if (err?.name === 'NotAllowedError' || err?.toString().includes('Permission')) {
-          msg = 'Izin kamera ditolak. Silakan izinkan akses kamera di peramban Anda.';
-        } else if (err?.name === 'NotFoundError' || err?.toString().includes('NotFound')) {
-          msg = 'Kamera tidak ditemukan pada perangkat Anda.';
+        const errStr = String(err?.message || err || '');
+        if (err?.name === 'NotAllowedError' || errStr.includes('Permission') || errStr.includes('denied')) {
+          msg = 'Izin kamera ditolak di peramban Anda. Silakan izinkan akses kamera di pengaturan browser.';
+        } else if (
+          err?.name === 'NotFoundError' ||
+          errStr.includes('NotFound') ||
+          errStr.includes('Requested device not found')
+        ) {
+          msg = 'Perangkat kamera tidak ditemukan pada komputer/perangkat Anda.';
         }
         setCameraError(msg);
         setShowManualInput(true);
@@ -197,11 +256,40 @@ export function BarcodeScannerModal({
     let isMounted = true;
 
     async function loadCameras() {
+      if (typeof window === 'undefined') return;
+
+      // 1. Check if mediaDevices API is supported in this browser
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+        if (isMounted) {
+          setCameraError('Peramban tidak mendukung akses kamera langsung.');
+          setShowManualInput(true);
+        }
+        return;
+      }
+
+      // 2. Pre-check if any video input device physically exists
+      try {
+        if (typeof navigator.mediaDevices.enumerateDevices === 'function') {
+          const deviceList = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = deviceList.filter((d) => d.kind === 'videoinput');
+          if (deviceList.length > 0 && videoInputs.length === 0) {
+            // Hardware has devices but no camera attached
+            if (isMounted) {
+              setCameraError('Perangkat kamera tidak ditemukan pada komputer/perangkat Anda.');
+              setShowManualInput(true);
+            }
+            return;
+          }
+        }
+      } catch {
+        // EnumerateDevices precheck failed; proceed to getCameras attempt
+      }
+
+      // 3. Query cameras via Html5Qrcode
       try {
         const devices = await Html5Qrcode.getCameras();
         if (isMounted && devices && devices.length > 0) {
           setCameras(devices);
-          // Prefer back camera if available
           const backCam = devices.find(
             (d) =>
               d.label.toLowerCase().includes('back') ||
@@ -213,12 +301,29 @@ export function BarcodeScannerModal({
           setSelectedCameraId(chosen);
           startScanner(chosen);
         } else if (isMounted) {
-          startScanner();
+          setCameraError('Kamera tidak ditemukan pada perangkat Anda.');
+          setShowManualInput(true);
         }
-      } catch (err) {
-        console.warn('Could not enumerate cameras, falling back to default:', err);
+      } catch (err: any) {
+        const errStr = String(err?.message || err || '');
+        const isNotFound =
+          err?.name === 'NotFoundError' ||
+          errStr.includes('NotFound') ||
+          errStr.includes('Requested device not found');
+        const isPermission =
+          err?.name === 'NotAllowedError' ||
+          errStr.includes('Permission') ||
+          errStr.includes('denied');
+
         if (isMounted) {
-          startScanner();
+          if (isNotFound) {
+            setCameraError('Perangkat kamera tidak ditemukan pada komputer/perangkat Anda.');
+          } else if (isPermission) {
+            setCameraError('Izin kamera ditolak di peramban Anda.');
+          } else {
+            setCameraError('Kamera tidak dapat diakses saat ini.');
+          }
+          setShowManualInput(true);
         }
       }
     }
@@ -262,6 +367,12 @@ export function BarcodeScannerModal({
     if (soundEnabled) playScanBeep();
     onScanSuccess(code);
     setManualInput('');
+  };
+
+  const handleSampleClick = (code: string) => {
+    if (soundEnabled) playScanBeep();
+    setLastScannedCode(code);
+    onScanSuccess(code);
   };
 
   if (!isOpen) return null;
@@ -311,14 +422,13 @@ export function BarcodeScannerModal({
         </div>
 
         {/* Camera Viewport & Overlay */}
-        <div className="relative bg-black flex-1 min-h-[300px] flex items-center justify-center overflow-hidden">
+        <div className="relative bg-black flex-1 min-h-[260px] sm:min-h-[300px] flex items-center justify-center overflow-hidden">
           {/* HTML5 QR Container */}
           <div id={containerId} className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover" />
 
           {/* Scanner Targeting Frame Graphic Overlay */}
           {isScanning && !cameraError && (
             <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
-              {/* Semi-transparent dark vignette mask around viewfinder */}
               <div className="relative w-64 sm:w-72 h-36 sm:h-40 border-2 border-teal-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
                 {/* Target Corners */}
                 <div className="absolute -top-1 -left-1 w-5 h-5 border-t-3 border-l-3 border-teal-400 rounded-tl-lg" />
@@ -336,7 +446,7 @@ export function BarcodeScannerModal({
             </div>
           )}
 
-          {/* Camera Error / Not Allowed Notice */}
+          {/* Camera Error / Not Available Notice */}
           {cameraError && (
             <div className="absolute inset-0 bg-slate-900/95 p-6 flex flex-col items-center justify-center text-center space-y-3 z-10">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
@@ -346,13 +456,22 @@ export function BarcodeScannerModal({
                 <h4 className="text-sm font-semibold text-slate-200">Kamera Tidak Tersedia</h4>
                 <p className="text-xs text-slate-400">{cameraError}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => startScanner(selectedCameraId || undefined)}
-                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
-              >
-                Coba Lagi
-              </button>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => startScanner(selectedCameraId || undefined)}
+                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Coba Lagi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowManualInput(true)}
+                  className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                >
+                  Gunakan Input Barcode
+                </button>
+              </div>
             </div>
           )}
 
@@ -386,7 +505,7 @@ export function BarcodeScannerModal({
           </div>
         </div>
 
-        {/* Bottom Section: Feedback & Manual Barcode Input Fallback */}
+        {/* Bottom Section: Feedback, Quick Samples & Manual Barcode Input Fallback */}
         <div className="p-4 bg-slate-900 border-t border-slate-800 space-y-3">
           {/* Last scanned feedback pill */}
           {lastScannedCode && (
@@ -404,15 +523,37 @@ export function BarcodeScannerModal({
             </div>
           )}
 
+          {/* Quick Simulation / Testing Barcode Chips */}
+          <div className="space-y-1.5">
+            <div className="flex items-center space-x-1.5 text-[11px] text-slate-400 font-medium">
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              <span>Simulasi Cepat (Klik barcode produk untuk mencoba):</span>
+            </div>
+            <div className="flex items-center flex-wrap gap-1.5">
+              {sampleBarcodes.map((item) => (
+                <button
+                  key={item.barcode}
+                  type="button"
+                  onClick={() => handleSampleClick(item.barcode)}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-teal-500/50 text-slate-300 hover:text-white rounded-lg text-[11px] transition-all cursor-pointer flex items-center space-x-1"
+                  title={`Barcode: ${item.barcode}`}
+                >
+                  <Barcode className="w-3 h-3 text-teal-400" />
+                  <span className="truncate max-w-[130px]">{item.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Toggle Manual Input */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pt-1 border-t border-slate-800">
             <button
               type="button"
               onClick={() => setShowManualInput(!showManualInput)}
               className="flex items-center space-x-1.5 text-xs text-teal-400 hover:text-teal-300 font-medium cursor-pointer"
             >
               <Keyboard className="w-3.5 h-3.5" />
-              <span>{showManualInput ? 'Sembunyikan Input Manual' : 'Ketik Barcode Manual / Gunakan Scanner USB'}</span>
+              <span>{showManualInput ? 'Sembunyikan Input Manual' : 'Ketik Barcode Manual / Scanner USB'}</span>
             </button>
           </div>
 
