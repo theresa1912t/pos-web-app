@@ -60,6 +60,28 @@ export interface Product {
   minStockThreshold?: number; // default: 5
   isArchived?: boolean;
   inventories?: ProductInventory[];
+  promoPrice?: number;
+  isPromoActive?: boolean;
+  promoBadge?: string;
+}
+
+export type PromotionType = 'percentage' | 'fixed_price' | 'fixed_discount';
+export type PromotionStatus = 'active' | 'scheduled' | 'ended' | 'inactive';
+
+export interface Promotion {
+  id: string;
+  name: string; // e.g. "Promo JSM Akhir Pekan", "Flash Sale Snack"
+  description?: string;
+  type: PromotionType; // 'percentage' | 'fixed_price' | 'fixed_discount'
+  discountValue: number; // e.g. 20 (for 20%), 2000 (for Rp 2.000 off), or target price
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  isActive: boolean;
+  productIds: string[]; // List of included product IDs
+  branchIds?: string[]; // Applicable branches, or ['*'] for all
+  badgeText?: string; // e.g. "JSM", "HEMAT", "FLASH SALE", "DISKON"
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Category {
@@ -154,7 +176,10 @@ export interface OrderItem {
   productId: string;
   productName: string;
   quantity: number;
-  sellingPrice: number;
+  sellingPrice: number; // Effective price paid (promo or regular)
+  originalPrice?: number; // Regular price before promo
+  discountAmount?: number; // Total saving per item (original - sellingPrice)
+  promoName?: string;
   cogs: number;
   subtotal: number;
 }
@@ -166,6 +191,7 @@ export interface Order {
   items: OrderItem[];
   total: number;
   totalCogs: number;
+  discountTotal?: number; // Total savings from promotions
   paymentMethod: PaymentMethod;
   salesChannel: SalesChannel;
   externalOrderId?: string;
@@ -279,6 +305,7 @@ export type AppModule =
   | 'dashboard'
   | 'orders'
   | 'products'
+  | 'promotions'
   | 'inventory'
   | 'categories'
   | 'racks'
@@ -381,6 +408,7 @@ export type TabType =
   | 'dashboard'
   | 'orders'
   | 'products'
+  | 'promotions'
   | 'inventory'
   | 'finance'
   | 'branches'

@@ -1,5 +1,6 @@
 import {
   Product,
+  Promotion,
   Category,
   Rack,
   StockOpname,
@@ -20,6 +21,7 @@ import {
 
 const STORAGE_KEYS = {
   PRODUCTS: 'warung_products_v1',
+  PROMOTIONS: 'warung_promotions_v1',
   CATEGORIES: 'warung_categories_v1',
   RACKS: 'warung_racks_v1',
   BRANCHES: 'warung_branches_v1',
@@ -88,6 +90,37 @@ export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-6', name: 'Snack & Biskuit' },
   { id: 'cat-7', name: 'Bumbu & Dapur' },
   { id: 'cat-8', name: 'Obat & Perawatan' },
+];
+
+export const INITIAL_PROMOTIONS: Promotion[] = [
+  {
+    id: 'promo-jsm-weekend',
+    name: 'Promo JSM Akhir Pekan',
+    description: 'Diskon spesial akhir pekan Jumat-Sabtu-Minggu untuk mie instan & minuman ringan favorit',
+    type: 'percentage',
+    discountValue: 15,
+    startDate: '2026-09-01',
+    endDate: '2026-09-30',
+    isActive: true,
+    productIds: ['prod-seed-1', 'prod-seed-3'],
+    branchIds: ['*'],
+    badgeText: 'JSM -15%',
+    createdAt: '2026-09-01T00:00:00.000Z',
+  },
+  {
+    id: 'promo-flash-teh',
+    name: 'Flash Sale Minuman Segar',
+    description: 'Potongan harga coret langsung Rp 1.000 untuk Teh Pucuk Harum botol dingin',
+    type: 'fixed_discount',
+    discountValue: 1000,
+    startDate: '2026-09-05',
+    endDate: '2026-09-25',
+    isActive: true,
+    productIds: ['prod-seed-5'],
+    branchIds: ['*'],
+    badgeText: 'HEMAT 1.000',
+    createdAt: '2026-09-05T08:00:00.000Z',
+  },
 ];
 
 export const INITIAL_SEED_PRODUCTS: Product[] = [
@@ -2519,6 +2552,25 @@ export const storageService = {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
   },
 
+  getPromotions(): Promotion[] {
+    if (typeof window === 'undefined') return INITIAL_PROMOTIONS;
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.PROMOTIONS);
+      if (!data) {
+        localStorage.setItem(STORAGE_KEYS.PROMOTIONS, JSON.stringify(INITIAL_PROMOTIONS));
+        return INITIAL_PROMOTIONS;
+      }
+      return JSON.parse(data);
+    } catch {
+      return INITIAL_PROMOTIONS;
+    }
+  },
+
+  savePromotions(promotions: Promotion[]): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(STORAGE_KEYS.PROMOTIONS, JSON.stringify(promotions));
+  },
+
   getAuthUser(): User | null {
     if (typeof window === 'undefined') return null;
     try {
@@ -2559,6 +2611,7 @@ export const storageService = {
     localStorage.setItem(STORAGE_KEYS.BRANCHES, JSON.stringify(INITIAL_BRANCHES));
     localStorage.setItem(STORAGE_KEYS.PRODUCT_INVENTORIES, JSON.stringify(INITIAL_PRODUCT_INVENTORIES));
     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+    localStorage.setItem(STORAGE_KEYS.PROMOTIONS, JSON.stringify(INITIAL_PROMOTIONS));
     localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
     localStorage.setItem(STORAGE_KEYS.RACKS, JSON.stringify(INITIAL_RACKS));
     localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS));
@@ -2568,3 +2621,5 @@ export const storageService = {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
   },
 };
+
+export const storage = storageService;

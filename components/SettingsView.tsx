@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { isStagingUser } from '@/lib/supabaseClient';
 import {
@@ -16,6 +16,9 @@ import {
   Mail,
   Phone,
   Image as ImageIcon,
+  Upload,
+  Trash2,
+  Link as LinkIcon,
 } from 'lucide-react';
 
 type SettingsTab = 'business' | 'account';
@@ -52,11 +55,46 @@ export function SettingsView() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Alerts
+  // Alerts & logo upload state
   const [businessSuccess, setBusinessSuccess] = useState(false);
   const [accountSuccess, setAccountSuccess] = useState(false);
   const [securityMessage, setSecurityMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isUpdatingSecurity, setIsUpdatingSecurity] = useState(false);
+
+  // Logo upload state & ref
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [isDraggingLogo, setIsDraggingLogo] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+
+  const handleLogoFile = (file?: File) => {
+    if (!file) return;
+    setLogoError(null);
+
+    // Validate type
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      setLogoError('Format file tidak didukung. Gunakan PNG, JPG, JPEG, atau WebP.');
+      return;
+    }
+
+    // Validate size (max 3MB)
+    if (file.size > 3 * 1024 * 1024) {
+      setLogoError('Ukuran file maksimal 3MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setBusinessLogo(event.target.result as string);
+      }
+    };
+    reader.onerror = () => {
+      setLogoError('Gagal membaca file gambar.');
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSaveBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,21 +338,134 @@ export function SettingsView() {
             </div>
 
             <div>
-              <label className="block text-slate-700 font-medium mb-1.5">URL Logo Usaha</label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={businessLogo}
-                  onChange={(e) => setBusinessLogo(e.target.value)}
-                  placeholder="https://..."
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-                />
-                {businessLogo && (
-                  <div className="w-10 h-10 rounded-xl border border-slate-200 overflow-hidden shrink-0 bg-slate-100 flex items-center justify-center">
-                    <img src={businessLogo} alt="Logo" className="w-full h-full object-cover" />
-                  </div>
-                )}
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-slate-700 font-medium">Logo Usaha</label>
+                <button
+                  type="button"
+                  onClick={() => setShowUrlInput(!showUrlInput)}
+                  className="text-[11px] text-teal-600 hover:text-teal-700 hover:underline flex items-center space-x-1 cursor-pointer"
+                >
+                  <LinkIcon className="w-3 h-3" />
+                  <span>{showUrlInput ? 'Sembunyikan Input URL' : 'Atau Masukkan URL'}</span>
+                </button>
               </div>
+
+              {/* Hidden File Input */}
+              <input
+                type="file"
+                ref={logoFileInputRef}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleLogoFile(file);
+                }}
+                accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
+                className="hidden"
+              />
+
+              {/* Logo Preview Card or Upload Dropzone */}
+              {businessLogo ? (
+                <div className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div className="flex items-center space-x-3.5 min-w-0">
+                    <div className="w-14 h-14 rounded-xl border border-slate-200 overflow-hidden shrink-0 bg-white flex items-center justify-center p-1 shadow-2xs">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={businessLogo}
+                        alt="Logo Usaha"
+                        className="w-full h-full object-contain"
+                        onError={() => setLogoError('Gambar tidak dapat dimuat')}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-800 truncate">Logo Usaha Aktif</p>
+                      <p className="text-[11px] text-slate-500">Tampil pada nota dan struk kasir</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => logoFileInputRef.current?.click()}
+                      className="px-3 py-1.5 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors cursor-pointer flex items-center space-x-1"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Ganti Logo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBusinessLogo('');
+                        if (logoFileInputRef.current) logoFileInputRef.current.value = '';
+                      }}
+                      className="p-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+                      title="Hapus Logo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingLogo(true);
+                  }}
+                  onDragLeave={() => setIsDraggingLogo(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingLogo(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleLogoFile(file);
+                  }}
+                  onClick={() => logoFileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
+                    isDraggingLogo
+                      ? 'border-teal-500 bg-teal-50/50'
+                      : 'border-slate-200 hover:border-teal-400 bg-slate-50/50 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto mb-2">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <p className="text-xs font-semibold text-slate-700">
+                    Klik untuk Unggah atau Seret Logo ke Sini
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Format PNG, JPG, JPEG, atau WebP (Maksimal 3MB)
+                  </p>
+                </div>
+              )}
+
+              {/* Optional URL Input fallback if user prefers pasting URL */}
+              {showUrlInput && (
+                <div className="mt-2.5 flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={businessLogo}
+                    onChange={(e) => {
+                      setBusinessLogo(e.target.value);
+                      setLogoError(null);
+                    }}
+                    placeholder="https://domain.com/logo.png"
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+                  />
+                  {businessLogo && (
+                    <button
+                      type="button"
+                      onClick={() => setBusinessLogo('')}
+                      className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {logoError && (
+                <p className="text-[11px] text-rose-600 mt-1.5 flex items-center space-x-1">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{logoError}</span>
+                </p>
+              )}
             </div>
 
             <div className="flex justify-end pt-3">

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import {
   Product,
+  Promotion,
   Category,
   Rack,
   StockOpname,
@@ -55,8 +56,11 @@ import {
   INITIAL_CHANNEL_SYNC_ERRORS,
   INITIAL_BRANCHES,
   INITIAL_PRODUCT_INVENTORIES,
+  INITIAL_PROMOTIONS,
+  storage,
   generateProductInventories,
 } from '@/lib/storage';
+import { getProductEffectivePromo } from '@/services/promotionService';
 import {
   DEFAULT_ROLES,
   STAGING_INITIAL_USERS,
@@ -69,6 +73,11 @@ import {
 
 interface AppContextType {
   products: Product[];
+  promotions: Promotion[];
+  addPromotion: (promo: Omit<Promotion, 'id' | 'createdAt'>) => Promise<Promotion>;
+  updatePromotion: (id: string, promo: Partial<Promotion>) => Promise<void>;
+  deletePromotion: (id: string) => Promise<void>;
+  togglePromotionStatus: (id: string) => Promise<void>;
   categories: Category[];
   racks: Rack[];
   branches: Branch[];
@@ -274,6 +283,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Application Data States (Strictly scoped to current authenticated user)
   const [products, setProducts] = useState<Product[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>(() => {
+    if (typeof window === 'undefined') return INITIAL_PROMOTIONS;
+    return storage.getPromotions();
+  });
   const [categories, setCategories] = useState<Category[]>([]);
   const [racks, setRacks] = useState<Rack[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -1897,6 +1910,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // PROMOTIONS CRUD
+  const addPromotion = async (promoData: Omit<Promotion, 'id' | 'createdAt'>): Promise<Promotion> => {
+    const newPromo: Promotion = {
+      ...promoData,
+      id: `promo-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    const next = [newPromo, ...promotions];
+    setPromotions(next);
+    storage.savePromotions(next);
+    return newPromo;
+  };
+
+  const updatePromotion = async (id: string, promoData: Partial<Promotion>): Promise<void> => {
+    const next = promotions.map(p => (p.id === id ? { ...p, ...promoData, updatedAt: new Date().toISOString() } : p));
+    setPromotions(next);
+    storage.savePromotions(next);
+  };
+
+  const deletePromotion = async (id: string): Promise<void> => {
+    const next = promotions.filter(p => p.id !== id);
+    setPromotions(next);
+    storage.savePromotions(next);
+  };
+
+  const togglePromotionStatus = async (id: string): Promise<void> => {
+    const next = promotions.map(p => (p.id === id ? { ...p, isActive: !p.isActive, updatedAt: new Date().toISOString() } : p));
+    setPromotions(next);
+    storage.savePromotions(next);
+  };
+
   // CATEGORY CRUD
   const addCategory = async (name: string): Promise<Category> => {
     const trimmed = name.trim();
@@ -2511,17 +2555,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     let total = 0;
     let totalCogs = 0;
+    let discountTotal = 0;
     const orderItems = items.map(item => {
-      const subtotal = item.product.sellingPrice * item.quantity;
+      const promoInfo = getProductEffectivePromo(item.product, promotions, targetBranchId);
+      const effectivePrice = promoInfo.hasPromo ? promoInfo.promoPrice : item.product.sellingPrice;
+      const subtotal = effectivePrice * item.quantity;
       const itemCogsTotal = item.product.cogs * item.quantity;
+      const itemDiscountTotal = (promoInfo.discountAmount || 0) * item.quantity;
+
       total += subtotal;
       totalCogs += itemCogsTotal;
+      discountTotal += itemDiscountTotal;
 
       return {
         productId: item.product.id,
         productName: item.product.name,
         quantity: item.quantity,
-        sellingPrice: item.product.sellingPrice,
+        sellingPrice: effectivePrice,
+        originalPrice: item.product.sellingPrice,
+        discountAmount: promoInfo.discountAmount || 0,
+        promoName: promoInfo.promo?.name,
         cogs: item.product.cogs,
         subtotal,
       };
@@ -2534,6 +2587,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       items: orderItems,
       total,
       totalCogs,
+      discountTotal,
       paymentMethod,
       salesChannel,
       externalOrderId: externalOrderId || undefined,
@@ -3314,6 +3368,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider
       value={{
         products,
+        promotions,
+        addPromotion,
+        updatePromotion,
+        deletePromotion,
+        togglePromotionStatus,
         categories,
         racks,
         stockOpnames,

@@ -6,7 +6,6 @@ import {
   Menu,
   Plus,
   Store,
-  Shield,
   Building2,
   ChevronDown,
   Check,
@@ -16,7 +15,6 @@ import {
 export function Topbar() {
   const {
     activeTab,
-    currentUserRole,
     hasPermission,
     setIsMobileNavOpen,
     setIsCreateOrderModalOpen,
@@ -53,6 +51,10 @@ export function Topbar() {
     products: {
       title: 'Katalog & Master Produk',
       subtitle: 'Kelola data barang dan kategori',
+    },
+    promotions: {
+      title: 'Manajemen Promosi & Harga Coret',
+      subtitle: 'Kelola diskon berkala, flash sale, program JSM, dan perlindungan margin HPP',
     },
     inventory: {
       title: 'Inventaris & Gudang',
@@ -239,13 +241,6 @@ export function Topbar() {
                 </div>
               )}
             </div>
-
-            {currentUserRole && (
-              <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">
-                <Shield className="w-3.5 h-3.5 text-teal-600" />
-                <span>Role: {currentUserRole.name}</span>
-              </div>
-            )}
 
             {canCreateOrder && (
               <button

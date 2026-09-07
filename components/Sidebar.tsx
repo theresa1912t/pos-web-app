@@ -21,6 +21,7 @@ import {
   Shield,
   Building2,
   Boxes,
+  BadgePercent,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -32,6 +33,7 @@ export function Sidebar({ isMobileDrawer = false }: SidebarProps) {
     activeTab,
     setActiveTab,
     products,
+    promotions,
     channelSyncErrors,
     settings,
     user,
@@ -63,6 +65,7 @@ export function Sidebar({ isMobileDrawer = false }: SidebarProps) {
   ).length;
 
   const unresolvedErrorCount = channelSyncErrors?.filter((e) => !e.resolved).length || 0;
+  const activePromoCount = promotions?.filter((p) => p.isActive).length || 0;
 
   const rawNavItems = [
     {
@@ -82,6 +85,13 @@ export function Sidebar({ isMobileDrawer = false }: SidebarProps) {
       label: 'Produk',
       icon: Package,
       visible: hasPermission('products', 'view'),
+    },
+    {
+      id: 'promotions' as const,
+      label: 'Promosi',
+      icon: BadgePercent,
+      badge: activePromoCount > 0 ? activePromoCount : undefined,
+      visible: hasPermission('promotions', 'view'),
     },
     {
       id: 'inventory' as const,

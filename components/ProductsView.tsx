@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Product, Category, Rack } from '@/types';
 import { formatRupiah } from '@/lib/utils';
+import { getProductEffectivePromo } from '@/services/promotionService';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { TablePagination } from '@/components/TablePagination';
 import {
@@ -33,6 +34,7 @@ import {
 export function ProductsView() {
   const {
     products,
+    promotions,
     categories,
     racks,
     createProduct,
@@ -443,9 +445,39 @@ export function ProductsView() {
                             )}
                           </td>
 
-                          {/* Selling Price */}
-                          <td className="py-2.5 px-4 text-right font-bold text-teal-700">
-                            {formatRupiah(prod.sellingPrice)}
+                          {/* Selling Price with Promotional Strikethrough Price Support */}
+                          <td className="py-2.5 px-4 text-right">
+                            {(() => {
+                              const promoInfo = getProductEffectivePromo(
+                                prod,
+                                promotions,
+                                activeBranchId !== 'all' ? activeBranchId : undefined
+                              );
+
+                              if (promoInfo.hasPromo) {
+                                return (
+                                  <div>
+                                    <div className="flex items-center justify-end space-x-1.5">
+                                      <span className="line-through text-xs text-slate-400">
+                                        {formatRupiah(prod.sellingPrice)}
+                                      </span>
+                                      <span className="inline-block text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                                        {promoInfo.badgeText}
+                                      </span>
+                                    </div>
+                                    <span className="font-bold text-sm text-emerald-700 block">
+                                      {formatRupiah(promoInfo.promoPrice)}
+                                    </span>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <span className="font-bold text-teal-700">
+                                  {formatRupiah(prod.sellingPrice)}
+                                </span>
+                              );
+                            })()}
                           </td>
 
                           {/* COGS (HPP) */}

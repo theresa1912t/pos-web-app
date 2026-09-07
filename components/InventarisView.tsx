@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { StockOpnameTab, StockOpnameTabRef } from '@/components/StockOpnameTab';
 import { RackManagementTab } from '@/components/RackManagementTab';
+import { filterProducts } from '@/services';
 import {
   ClipboardCheck,
   Layers,
@@ -27,10 +28,8 @@ export function InventarisView() {
   const [opnameView, setOpnameView] = useState<'list' | 'wizard' | 'schedule' | 'detail'>('list');
   const stockOpnameRef = useRef<StockOpnameTabRef>(null);
 
-  // Low stock calculation
-  const lowStockProducts = products.filter(
-    (p) => !p.isArchived && p.stock <= (p.minStockThreshold ?? 5)
-  );
+  // Low stock calculation using domain service
+  const lowStockProducts = filterProducts(products, { stockFilter: 'low' });
 
   return (
     <div className="space-y-6">
