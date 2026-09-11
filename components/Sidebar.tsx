@@ -22,6 +22,8 @@ import {
   Building2,
   Boxes,
   BadgePercent,
+  Zap,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -126,8 +128,14 @@ export function Sidebar({ isMobileDrawer = false }: SidebarProps) {
       visible: hasPermission('integrasi_channel', 'view'),
     },
     {
+      id: 'export_data' as const,
+      label: 'Ekspor Data',
+      icon: FileSpreadsheet,
+      visible: hasPermission('export_data', 'view'),
+    },
+    {
       id: 'users' as const,
-      label: 'User & Role',
+      label: 'Pengguna',
       icon: Users,
       visible: hasPermission('users', 'view'),
     },
@@ -347,6 +355,20 @@ export function Sidebar({ isMobileDrawer = false }: SidebarProps) {
             >
               <Settings className="w-4 h-4 text-slate-400" />
               <span>Pengaturan Akun</span>
+            </button>
+
+            <button
+              id="sidebar-profile-subscription-btn"
+              onClick={handleProfileSettingsClick}
+              className="w-full flex items-center justify-between px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center space-x-2.5">
+                <Zap className="w-4 h-4 text-teal-600" />
+                <span>Langganan</span>
+              </div>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-teal-50 text-teal-700 font-bold uppercase tracking-wider border border-teal-200">
+                {settings.subscription?.tier || 'Trial'}
+              </span>
             </button>
 
             <div className="border-t border-slate-100 my-1"></div>

@@ -17,6 +17,8 @@ import {
   ChannelSyncError,
   Branch,
   ProductInventory,
+  CashierShift,
+  CashMovement,
 } from '@/types';
 
 const STORAGE_KEYS = {
@@ -28,6 +30,7 @@ const STORAGE_KEYS = {
   PRODUCT_INVENTORIES: 'warung_product_inventories_v1',
   STOCK_OPNAMES: 'warung_stock_opnames_v1',
   STOCK_OPNAME_SCHEDULES: 'warung_stock_opname_schedules_v1',
+  CASHIER_SHIFTS: 'warung_cashier_shifts_v1',
   RESTOCKS: 'warung_restocks_v1',
   ORDERS: 'warung_orders_v1',
   REVENUES: 'warung_revenues_v1',
@@ -67,6 +70,69 @@ export const INITIAL_BRANCHES: Branch[] = [
     phone: '0815-6677-8899',
     status: 'Active',
     createdAt: '2026-04-10T10:00:00.000Z',
+  },
+];
+
+export const INITIAL_CASHIER_SHIFTS: CashierShift[] = [
+  {
+    id: 'shift-demo-yesterday',
+    shiftNumber: 'SH-20260907-01',
+    branchId: 'branch-1',
+    branchName: 'Cabang Utama - Tebet',
+    cashierId: 'user-kasir-1',
+    cashierName: 'Siti Rahma (Kasir Pagi)',
+    status: 'Closed',
+    startTime: '2026-09-07T08:00:00.000Z',
+    endTime: '2026-09-07T16:00:00.000Z',
+    startingCash: 200000,
+    cashSalesTotal: 785000,
+    nonCashSalesTotal: 520000,
+    cashInTotal: 0,
+    cashOutTotal: 25000,
+    expectedEndingCash: 960000,
+    actualEndingCash: 960000,
+    difference: 0,
+    totalOrdersCount: 28,
+    cashMovements: [
+      {
+        id: 'cm-1',
+        type: 'CashOut',
+        amount: 25000,
+        reason: 'Beli kantong kresek & lakban packing',
+        createdAt: '2026-09-07T11:30:00.000Z',
+        cashierName: 'Siti Rahma',
+      },
+    ],
+    notes: 'Shift pagi lancar, kas fisik klop seimbang 100%.',
+    closedBy: 'Siti Rahma',
+  },
+  {
+    id: 'shift-demo-today-active',
+    shiftNumber: 'SH-20260908-01',
+    branchId: 'branch-1',
+    branchName: 'Cabang Utama - Tebet',
+    cashierId: 'user-kasir-active',
+    cashierName: 'Budi Santoso (Kasir Aktif)',
+    status: 'Open',
+    startTime: '2026-09-08T08:00:00.000Z',
+    startingCash: 250000,
+    cashSalesTotal: 340000,
+    nonCashSalesTotal: 215000,
+    cashInTotal: 0,
+    cashOutTotal: 15000,
+    expectedEndingCash: 575000,
+    totalOrdersCount: 12,
+    cashMovements: [
+      {
+        id: 'cm-2',
+        type: 'CashOut',
+        amount: 15000,
+        reason: 'Beli es batu untuk display minuman dingin',
+        createdAt: '2026-09-08T09:45:00.000Z',
+        cashierName: 'Budi Santoso',
+      },
+    ],
+    notes: 'Shift aktif sedang berjalan.',
   },
 ];
 
@@ -982,6 +1048,14 @@ export const INITIAL_SETTINGS: BusinessSettings = {
   ownerName: 'Warung Juara',
   ownerEmail: 'warungjuara@gmail.com',
   ownerPhone: '0812-9876-5432',
+  subscription: {
+    tier: 'trial',
+    status: 'active',
+    expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    activeBranchesLimit: 1,
+    maxUsersLimit: 3,
+    billingCycle: 'monthly',
+  },
   printerName: 'POS Thermal Printer 58mm (USB/Bluetooth)',
   printerConnected: true,
   printerPaperSize: '58mm',
@@ -2569,6 +2643,25 @@ export const storageService = {
   savePromotions(promotions: Promotion[]): void {
     if (typeof window === 'undefined') return;
     localStorage.setItem(STORAGE_KEYS.PROMOTIONS, JSON.stringify(promotions));
+  },
+
+  getCashierShifts(): CashierShift[] {
+    if (typeof window === 'undefined') return INITIAL_CASHIER_SHIFTS;
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.CASHIER_SHIFTS);
+      if (!data) {
+        localStorage.setItem(STORAGE_KEYS.CASHIER_SHIFTS, JSON.stringify(INITIAL_CASHIER_SHIFTS));
+        return INITIAL_CASHIER_SHIFTS;
+      }
+      return JSON.parse(data);
+    } catch {
+      return INITIAL_CASHIER_SHIFTS;
+    }
+  },
+
+  saveCashierShifts(shifts: CashierShift[]): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(STORAGE_KEYS.CASHIER_SHIFTS, JSON.stringify(shifts));
   },
 
   getAuthUser(): User | null {

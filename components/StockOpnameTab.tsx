@@ -7,6 +7,7 @@ import { formatRupiah, formatTime } from '@/lib/utils';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { TablePagination } from '@/components/TablePagination';
+import { ScheduleOpnameModal } from '@/components/stock-opname/ScheduleOpnameModal';
 import {
   ClipboardCheck,
   Plus,
@@ -29,6 +30,7 @@ import {
   FileText,
   Clock,
   Check,
+  Play,
 } from 'lucide-react';
 
 export interface StockOpnameTabRef {
@@ -81,14 +83,6 @@ export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>
 
   // Schedule Modal
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-  const [scheduleTitle, setScheduleTitle] = useState('');
-  const [scheduleFrequency, setScheduleFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'custom'>('weekly');
-  const [scheduleNextDate, setScheduleNextDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 7);
-    return d.toISOString().slice(0, 10);
-  });
-  const [scheduleScope, setScheduleScope] = useState<'All' | 'Category' | 'Rack'>('All');
 
   // Confirmation dialog states
   const [confirmDeleteOpname, setConfirmDeleteOpname] = useState<StockOpname | null>(null);
@@ -148,6 +142,47 @@ export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>
     setActiveItems(opname.items || []);
     setWizardStep(2);
     setView('wizard');
+  };
+
+  // Directly execute a pre-configured schedule
+  const handleExecuteSchedule = (sch: StockOpnameSchedule) => {
+    let scopedProds: Product[] = products.filter((p) => !p.isArchived);
+
+    if (sch.scope === 'Category' && sch.scopeTargetId) {
+      scopedProds = scopedProds.filter((p) => p.category === sch.scopeTargetId);
+    } else if (sch.scope === 'Rack' && sch.scopeTargetId) {
+      scopedProds = scopedProds.filter((p) => p.rackId === sch.scopeTargetId);
+    }
+
+    if (scopedProds.length === 0) {
+      showToast('Tidak ada produk yang sesuai dengan cakupan jadwal ini.', 'error');
+      return;
+    }
+
+    const initialItems: StockOpnameItem[] = scopedProds.map((prod) => ({
+      productId: prod.id,
+      productName: prod.name,
+      barcode: prod.barcode,
+      category: prod.category,
+      rackName: prod.rackName,
+      unit: prod.unit || 'Pcs',
+      cogs: prod.cogs || 0,
+      systemStock: prod.stock || 0,
+      physicalStock: prod.stock || 0,
+      difference: 0,
+      discrepancyValue: 0,
+      isCounted: false,
+    }));
+
+    setEditingOpnameId(null);
+    setScope(sch.scope);
+    setScopeTargetId(sch.scopeTargetId || '');
+    setScopeTargetName(sch.scopeTargetName || '');
+    setOpnameNotes(`Jadwal: ${sch.title}`);
+    setActiveItems(initialItems);
+    setWizardStep(2);
+    setView('wizard');
+    showToast(`Memulai opname untuk jadwal: ${sch.title}`);
   };
 
   // Generate items for chosen scope in Step 1 -> proceed to Step 2
@@ -351,7 +386,7 @@ export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>
           {/* Opname History Table */}
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-              <h4 className="text-xs font-bold text-slate-900">Riwayat & Sesi Stock Opname</h4>
+              <h4 className="text-xs font-bold text-slate-900">Riwayat Sesi Stock Opname</h4>
               <span className="text-[11px] text-slate-400">{stockOpnames.length} Rekaman</span>
             </div>
 
@@ -360,7 +395,7 @@ export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>
                 <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-[10px] border-b border-slate-200">
                   <tr>
                     <th className="py-3 px-4">No. Opname</th>
-                    <th className="py-3 px-4">Tanggal & Operator</th>
+                    <th className="py-3 px-4">Tanggal dan Operator</th>
                     <th className="py-3 px-4">Cakupan Ruang Lingkup</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-right">Selisih Barang</th>
@@ -405,7 +440,7 @@ export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>
                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
                             }`}
                           >
-                            {so.status === 'Completed' ? 'Selesai & Disesuaikan' : 'Draf Perhitungan'}
+                            {so.status === 'Completed' ? 'Selesai dan Disesuaikan' : 'Draf Perhitungan'}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right font-mono">
@@ -992,7 +1027,7 @@ export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>
                     className="flex items-center space-x-2 px-6 py-2.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-xl text-xs font-semibold shadow-md shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
                   >
                     <Check className="w-4 h-4" />
-                    <span>{isSubmitting ? 'Memproses...' : 'Finalisasi & Sesuaikan Stok'}</span>
+                    <span>{isSubmitting ? 'Memproses...' : 'Sesuaikan Stok'}</span>
                   </button>
                 </div>
               </div>
@@ -1029,7 +1064,7 @@ export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>
             <div className="border-b border-slate-200 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
-                  Laporan Hasil Stock Opname & Rekonsiliasi
+                  Laporan Hasil Stock Opname
                 </h3>
                 <p className="text-xs text-slate-500">{settings.name || 'Warung Juara'}</p>
               </div>
@@ -1188,8 +1223,18 @@ export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
                     <span className="flex items-center space-x-1">
                       <Clock className="w-3.5 h-3.5 text-teal-600" />
-                      <span>Jadwal Berikutnya: <strong>{new Date(sch.scheduledDate).toLocaleDateString('id-ID')}</strong></span>
+                      <span>Jadwal: <strong>{new Date(sch.scheduledDate).toLocaleDateString('id-ID')}</strong></span>
                     </span>
+
+                    <button
+                      type="button"
+                      onClick={() => handleExecuteSchedule(sch)}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-xl text-xs font-semibold cursor-pointer shadow-xs transition-colors"
+                      title="Mulai penghitungan stok untuk jadwal ini sekarang"
+                    >
+                      <Play className="w-3 h-3 fill-current" />
+                      <span>Eksekusi</span>
+                    </button>
                   </div>
                 </div>
               ))
@@ -1199,106 +1244,16 @@ export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>
       )}
 
       {/* SCHEDULE MODAL */}
-      {isScheduleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-bold text-sm text-slate-900">Tambah Jadwal Stock Opname</h3>
-              <button
-                type="button"
-                onClick={() => setIsScheduleModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Judul / Agenda Jadwal *</label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Audit Stok Minuman Akhir Pekan"
-                  value={scheduleTitle}
-                  onChange={(e) => setScheduleTitle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Frekuensi</label>
-                  <select
-                    value={scheduleFrequency}
-                    onChange={(e) => setScheduleFrequency(e.target.value as 'daily' | 'weekly' | 'monthly' | 'custom')}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
-                  >
-                    <option value="weekly">Mingguan</option>
-                    <option value="monthly">Bulanan</option>
-                    <option value="daily">Harian</option>
-                    <option value="custom">Kustom</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tanggal Mulai</label>
-                  <input
-                    type="date"
-                    value={scheduleNextDate}
-                    onChange={(e) => setScheduleNextDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Cakupan Ruang Lingkup</label>
-                <select
-                  value={scheduleScope}
-                  onChange={(e) => setScheduleScope(e.target.value as 'All' | 'Category' | 'Rack')}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
-                >
-                  <option value="All">Semua Produk</option>
-                  <option value="Category">Per Kategori</option>
-                  <option value="Rack">Per Rak</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsScheduleModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!scheduleTitle.trim()) {
-                    showToast('Judul jadwal wajib diisi', 'error');
-                    return;
-                  }
-                  await addStockOpnameSchedule({
-                    title: scheduleTitle.trim(),
-                    frequency: scheduleFrequency,
-                    scheduledDate: scheduleNextDate,
-                    scope: scheduleScope,
-                    isActive: true,
-                  });
-                  setIsScheduleModalOpen(false);
-                  setScheduleTitle('');
-                  showToast('Jadwal opname berhasil ditambahkan!');
-                }}
-                className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold cursor-pointer shadow-sm"
-              >
-                Simpan Jadwal
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ScheduleOpnameModal
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        categories={categories}
+        racks={racks}
+        onSaveSchedule={async (scheduleData) => {
+          await addStockOpnameSchedule(scheduleData);
+        }}
+        showToast={showToast}
+      />
 
       {/* Barcode Scanner Camera Modal */}
       {isScannerOpen && (
@@ -1378,7 +1333,7 @@ export const StockOpnameTab = forwardRef<StockOpnameTabRef, StockOpnameTabProps>
           setShowConfirmFinalize(false);
         }}
         type="warning"
-        title="Finalisasi & Sesuaikan Stok Inventaris?"
+        title="Sesuaikan Stok Inventaris?"
         description="Stok sistem seluruh produk yang diaudit akan langsung disesuaikan dengan angka hitungan fisik riil. Tindakan ini juga akan mencatat riwayat selisih HPP pada buku inventaris."
         confirmText="Ya, Sesuaikan Stok Sekarang"
         cancelText="Periksa Lagi"

@@ -31,6 +31,9 @@ import {
   BranchStatus,
   ProductInventory,
   TabType,
+  CashierShift,
+  CashMovement,
+  ShiftStatus,
 } from '@/types';
 import {
   getSupabase,
@@ -57,6 +60,7 @@ import {
   INITIAL_BRANCHES,
   INITIAL_PRODUCT_INVENTORIES,
   INITIAL_PROMOTIONS,
+  INITIAL_CASHIER_SHIFTS,
   storage,
   generateProductInventories,
 } from '@/lib/storage';
@@ -240,6 +244,20 @@ interface AppContextType {
   updateSettings: (newSettings: Partial<BusinessSettings>) => Promise<void>;
   resetToDemoData: () => void;
 
+  // Cashier Shifts & Cash Drawer Settlement (Closing Kasir)
+  cashierShifts: CashierShift[];
+  activeShift: CashierShift | null;
+  isShiftModalOpen: boolean;
+  setIsShiftModalOpen: (open: boolean) => void;
+  shiftModalBranchId: string | null;
+  setShiftModalBranchId: (branchId: string | null) => void;
+  openShiftModal: (branchId?: string) => void;
+  selectedShiftForZReport: CashierShift | null;
+  setSelectedShiftForZReport: (shift: CashierShift | null) => void;
+  startShift: (startingCash: number, notes?: string, branchId?: string) => Promise<CashierShift>;
+  closeShift: (shiftId: string, actualEndingCash: number, notes?: string) => Promise<CashierShift>;
+  addCashMovement: (shiftId: string, type: 'CashIn' | 'CashOut', amount: number, reason: string, notes?: string) => Promise<CashMovement>;
+
   // Global Modal & Navigation helpers
   isCreateOrderModalOpen: boolean;
   setIsCreateOrderModalOpen: (open: boolean) => void;
@@ -337,6 +355,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [restockModalProductId, setRestockModalProductId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
 
+  // Cashier Shifts & Cash Drawer Settlement
+  const [cashierShifts, setCashierShifts] = useState<CashierShift[]>(() => {
+    return storage.getCashierShifts();
+  });
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [shiftModalBranchId, setShiftModalBranchId] = useState<string | null>(null);
+  const [selectedShiftForZReport, setSelectedShiftForZReport] = useState<CashierShift | null>(null);
+
+  const openShiftModal = useCallback((branchId?: string) => {
+    setShiftModalBranchId(branchId || null);
+    setIsShiftModalOpen(true);
+  }, []);
+
   // Compute currently logged-in user's role
   const currentUserRole = useMemo<AppRole | null>(() => {
     if (!user) return null;
@@ -352,9 +383,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user, currentUserRole]);
 
   const accessibleBranches = useMemo(() => {
-    if (!user || canSwitchToAllBranches) return branches;
+    const baseBranches = branches.length > 0 ? branches : INITIAL_BRANCHES;
+    if (!user || canSwitchToAllBranches) return baseBranches;
     const access = user.branchAccess || [];
-    return branches.filter((b) => access.includes(b.id));
+    if (access.length === 0) return baseBranches;
+    const filtered = baseBranches.filter((b) => access.includes(b.id));
+    return filtered.length > 0 ? filtered : baseBranches;
   }, [branches, user, canSwitchToAllBranches]);
 
   useEffect(() => {
@@ -372,6 +406,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (activeBranchId === 'all') return null;
     return branches.find((b) => b.id === activeBranchId) || null;
   }, [branches, activeBranchId]);
+
+  // Compute active open shift for the currently selected branch (or first accessible branch)
+  const activeShift = useMemo<CashierShift | null>(() => {
+    const targetBranch = activeBranchId === 'all' ? (branches[0]?.id || 'branch-1') : activeBranchId;
+    return cashierShifts.find((s) => s.status === 'Open' && s.branchId === targetBranch) || null;
+  }, [cashierShifts, activeBranchId, branches]);
 
   // Check permission helper
   const hasPermission = useCallback((module: AppModule, action: 'view' | 'create' | 'edit' | 'delete' = 'view'): boolean => {
@@ -1593,13 +1633,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const getProductStockInBranch = useCallback((productId: string, branchId?: string): number => {
+    const prod = products.find((p) => p.id === productId);
+    if (!prod) return 0;
+
     const targetBranch = branchId || activeBranchId;
     if (!targetBranch || targetBranch === 'all') {
-      const prod = products.find((p) => p.id === productId);
-      return prod?.stock ?? 0;
+      return prod.stock ?? 0;
     }
     const inv = productInventories.find((i) => i.productId === productId && i.branchId === targetBranch);
-    return inv?.stock ?? 0;
+    if (inv !== undefined && typeof inv.stock === 'number') {
+      return inv.stock;
+    }
+    return prod.stock ?? 0;
   }, [activeBranchId, products, productInventories]);
 
   const getBranchInventory = useCallback((branchId: string): ProductInventory[] => {
@@ -2639,6 +2684,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const nextOrders = [newOrder, ...orders];
     const nextRevenues = [newRevenue, ...revenues];
 
+    // Real-time update to active cashier shift if open in target branch
+    setCashierShifts(prevShifts => {
+      const openIndex = prevShifts.findIndex(s => s.status === 'Open' && s.branchId === targetBranchId);
+      if (openIndex === -1) return prevShifts;
+      const curShift = prevShifts[openIndex];
+      const isCash = newOrder.paymentMethod === 'Cash';
+      const addedCash = isCash ? newOrder.total : 0;
+      const addedNonCash = !isCash ? newOrder.total : 0;
+      const updated: CashierShift = {
+        ...curShift,
+        cashSalesTotal: curShift.cashSalesTotal + addedCash,
+        nonCashSalesTotal: curShift.nonCashSalesTotal + addedNonCash,
+        expectedEndingCash: curShift.expectedEndingCash + addedCash,
+        totalOrdersCount: curShift.totalOrdersCount + 1,
+      };
+      const next = [...prevShifts];
+      next[openIndex] = updated;
+      storage.saveCashierShifts(next);
+      return next;
+    });
+
     setOrders(nextOrders);
     setProducts(nextProducts);
     setRevenues(nextRevenues);
@@ -2749,6 +2815,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const nextOrders = orders.map(o => (o.id === orderId ? { ...o, status: 'Canceled' as const } : o));
     const nextRevenues = revenues.filter(r => r.orderId !== orderId);
+
+    // Update active cashier shift if order is canceled
+    if (targetBranchId) {
+      setCashierShifts(prevShifts => {
+        const openIndex = prevShifts.findIndex(s => s.status === 'Open' && s.branchId === targetBranchId);
+        if (openIndex === -1) return prevShifts;
+        const curShift = prevShifts[openIndex];
+        const isCash = order.paymentMethod === 'Cash';
+        const deductedCash = isCash ? order.total : 0;
+        const deductedNonCash = !isCash ? order.total : 0;
+        const updated: CashierShift = {
+          ...curShift,
+          cashSalesTotal: Math.max(0, curShift.cashSalesTotal - deductedCash),
+          nonCashSalesTotal: Math.max(0, curShift.nonCashSalesTotal - deductedNonCash),
+          expectedEndingCash: Math.max(0, curShift.expectedEndingCash - deductedCash),
+          totalOrdersCount: Math.max(0, curShift.totalOrdersCount - 1),
+        };
+        const next = [...prevShifts];
+        next[openIndex] = updated;
+        storage.saveCashierShifts(next);
+        return next;
+      });
+    }
 
     setOrders(nextOrders);
     setProducts(nextProducts);
@@ -3338,6 +3427,123 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { success: true, order: newOrder };
   };
 
+  // CASHIER SHIFT & CASH DRAWER SETTLEMENT ACTIONS
+  const startShift = async (startingCash: number, notes?: string, branchId?: string): Promise<CashierShift> => {
+    const targetBranchId = branchId || (activeBranchId !== 'all' ? activeBranchId : (branches[0]?.id || 'branch-1'));
+    const targetBranch = branches.find(b => b.id === targetBranchId);
+    const targetBranchName = targetBranch?.name || 'Cabang Utama';
+
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const existingToday = cashierShifts.filter(s => s.shiftNumber.includes(`SH-${dateStr}`)).length;
+    const shiftSeq = String(existingToday + 1).padStart(2, '0');
+    const shiftNumber = `SH-${dateStr}-${shiftSeq}`;
+
+    const newShift: CashierShift = {
+      id: `shift-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      shiftNumber,
+      branchId: targetBranchId,
+      branchName: targetBranchName,
+      cashierId: user?.id || 'cashier-current',
+      cashierName: user?.name || 'Kasir',
+      status: 'Open',
+      startTime: new Date().toISOString(),
+      startingCash,
+      cashSalesTotal: 0,
+      nonCashSalesTotal: 0,
+      cashInTotal: 0,
+      cashOutTotal: 0,
+      expectedEndingCash: startingCash,
+      totalOrdersCount: 0,
+      cashMovements: [],
+      notes: notes || '',
+    };
+
+    const nextShifts = [newShift, ...cashierShifts];
+    setCashierShifts(nextShifts);
+    storage.saveCashierShifts(nextShifts);
+
+    return newShift;
+  };
+
+  const closeShift = async (shiftId: string, actualEndingCash: number, notes?: string): Promise<CashierShift> => {
+    const target = cashierShifts.find(s => s.id === shiftId);
+    if (!target) throw new Error('Shift tidak ditemukan');
+
+    const expected = target.expectedEndingCash;
+    const difference = actualEndingCash - expected;
+    const closedShift: CashierShift = {
+      ...target,
+      status: 'Closed',
+      endTime: new Date().toISOString(),
+      actualEndingCash,
+      difference,
+      notes: notes || target.notes,
+      closedBy: user?.name || 'Kasir',
+    };
+
+    const nextShifts = cashierShifts.map(s => s.id === shiftId ? closedShift : s);
+    setCashierShifts(nextShifts);
+    storage.saveCashierShifts(nextShifts);
+
+    return closedShift;
+  };
+
+  const addCashMovement = async (
+    shiftId: string,
+    type: 'CashIn' | 'CashOut',
+    amount: number,
+    reason: string,
+    notes?: string
+  ): Promise<CashMovement> => {
+    const target = cashierShifts.find(s => s.id === shiftId);
+    if (!target) throw new Error('Shift tidak ditemukan');
+
+    const movement: CashMovement = {
+      id: `cm-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      type,
+      amount,
+      reason,
+      notes,
+      createdAt: new Date().toISOString(),
+      cashierName: user?.name || 'Kasir',
+    };
+
+    const nextMovements = [...target.cashMovements, movement];
+    const newCashIn = type === 'CashIn' ? target.cashInTotal + amount : target.cashInTotal;
+    const newCashOut = type === 'CashOut' ? target.cashOutTotal + amount : target.cashOutTotal;
+    const newExpected = target.startingCash + target.cashSalesTotal + newCashIn - newCashOut;
+
+    const updatedShift: CashierShift = {
+      ...target,
+      cashMovements: nextMovements,
+      cashInTotal: newCashIn,
+      cashOutTotal: newCashOut,
+      expectedEndingCash: newExpected,
+    };
+
+    const nextShifts = cashierShifts.map(s => s.id === shiftId ? updatedShift : s);
+    setCashierShifts(nextShifts);
+    storage.saveCashierShifts(nextShifts);
+
+    // If petty cash out, record in costs for accounting clarity
+    if (type === 'CashOut') {
+      const newCost: Cost = {
+        id: `cost-shift-${movement.id}`,
+        amount,
+        category: 'Other',
+        source: 'Manual',
+        branchId: target.branchId,
+        branchName: target.branchName,
+        description: `Petty Cash (${target.shiftNumber}): ${reason}`,
+        date: movement.createdAt,
+        notes,
+      };
+      setCosts(prev => [newCost, ...prev]);
+    }
+
+    return movement;
+  };
+
   // RESET TO DEMO (STAGING ONLY)
   const resetToDemoData = () => {
     const initial = getStagingInitialData();
@@ -3358,6 +3564,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setChannelIntegrations(initial.channelIntegrations || INITIAL_CHANNEL_INTEGRATIONS);
     setProductMappings(initial.productMappings || INITIAL_PRODUCT_MAPPINGS);
     setChannelSyncErrors(initial.channelSyncErrors || INITIAL_CHANNEL_SYNC_ERRORS);
+    setCashierShifts(INITIAL_CASHIER_SHIFTS);
+    storage.saveCashierShifts(INITIAL_CASHIER_SHIFTS);
     setHasCompletedOnboarding(true);
     if (user) {
       localUserDataStore.saveUserData(user.id, initial);
@@ -3477,6 +3685,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addCost,
         updateSettings,
         resetToDemoData,
+
+        // Cashier Shifts & Cash Drawer Settlement
+        cashierShifts,
+        activeShift,
+        isShiftModalOpen,
+        setIsShiftModalOpen,
+        shiftModalBranchId,
+        setShiftModalBranchId,
+        openShiftModal,
+        selectedShiftForZReport,
+        setSelectedShiftForZReport,
+        startShift,
+        closeShift,
+        addCashMovement,
 
         isCreateOrderModalOpen,
         setIsCreateOrderModalOpen,

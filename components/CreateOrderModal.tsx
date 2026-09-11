@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Product, PaymentMethod, Order, SalesChannel } from '@/types';
 import { formatRupiah, formatTime } from '@/lib/utils';
+import { INITIAL_BRANCHES } from '@/lib/storage';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { triggerCashDrawerOpen } from '@/lib/hardwareBridge';
 import { SalesChannelBadge } from '@/components/SalesChannelBadge';
@@ -28,6 +29,8 @@ import {
   Sparkles,
   Building2,
   BadgePercent,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 
 interface CreateOrderModalProps {
@@ -50,19 +53,42 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
     getProductStockInBranch,
     canSwitchToAllBranches,
     accessibleBranches,
+    cashierShifts,
+    openShiftModal,
   } = useApp();
 
-  const defaultBranchId = useMemo(() => {
-    if (activeBranchId !== 'all') return activeBranchId;
-    const activeAccessible = accessibleBranches.find((b) => b.status === 'Active');
-    return activeAccessible?.id || accessibleBranches[0]?.id || branches[0]?.id || 'branch-1';
-  }, [activeBranchId, accessibleBranches, branches]);
+  const validBranches = useMemo(() => {
+    if (accessibleBranches && accessibleBranches.length > 0) return accessibleBranches;
+    if (branches && branches.length > 0) return branches;
+    return INITIAL_BRANCHES;
+  }, [accessibleBranches, branches]);
 
-  const [orderBranchId, setOrderBranchId] = useState<string>(defaultBranchId);
+  const defaultBranchId = useMemo(() => {
+    if (activeBranchId !== 'all' && validBranches.some((b) => b.id === activeBranchId)) return activeBranchId;
+    const activeAccessible = validBranches.find((b) => b.status === 'Active');
+    return activeAccessible?.id || validBranches[0]?.id || 'branch-1';
+  }, [activeBranchId, validBranches]);
+
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+
+  const orderBranchId = useMemo(() => {
+    if (selectedBranchId && validBranches.some((b) => b.id === selectedBranchId)) {
+      return selectedBranchId;
+    }
+    return defaultBranchId;
+  }, [selectedBranchId, validBranches, defaultBranchId]);
+
+  const setOrderBranchId = (branchId: string) => {
+    setSelectedBranchId(branchId);
+  };
 
   const currentBranch = useMemo(() => {
-    return branches.find((b) => b.id === orderBranchId) || branches[0];
-  }, [branches, orderBranchId]);
+    return validBranches.find((b) => b.id === orderBranchId) || validBranches[0];
+  }, [validBranches, orderBranchId]);
+
+  const currentBranchShift = useMemo(() => {
+    return cashierShifts.find((s) => s.status === 'Open' && s.branchId === orderBranchId) || null;
+  }, [cashierShifts, orderBranchId]);
 
   const [step, setStep] = useState<1 | 2 | 3 | 'success'>(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -369,9 +395,6 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
               <h2 className="text-sm sm:text-base font-bold text-slate-900">
                 Kasir & Transaksi Baru
               </h2>
-              <p className="text-[11px] text-slate-500">
-                Proses cepat penjualan warung dengan scan barcode & pencarian instan
-              </p>
             </div>
           </div>
 
@@ -436,16 +459,16 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
               <div className="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-slate-200 overflow-hidden bg-slate-50/30">
                 {/* Search Bar, Categories & Scan Barcode Action */}
                 <div className="p-4 border-b border-slate-200 space-y-3 bg-white">
-                  {/* Branch Context Indicator */}
-                  <div className="flex items-center justify-between px-3 py-2 bg-teal-50/60 border border-teal-200/80 rounded-xl text-xs">
+                  {/* Branch Context & Cashier Shift / Drawer Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-teal-50/60 border border-teal-200/80 rounded-xl text-xs">
+                    {/* Left: Branch selector */}
                     <div className="flex items-center space-x-2">
                       <Building2 className="w-4 h-4 text-teal-700 shrink-0" />
-                      <span className="text-slate-600 font-medium">Cabang Transaksi:</span>
-                    </div>
+                      <span className="text-slate-600 font-medium hidden sm:inline">Cabang:</span>
 
-                    {canSwitchToAllBranches ? (
-                      <div className="flex items-center space-x-2">
+                      {canSwitchToAllBranches ? (
                         <select
+                          id="pos-branch-select"
                           value={orderBranchId}
                           onChange={(e) => {
                             const newBranchId = e.target.value;
@@ -458,17 +481,52 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
                           }}
                           className="bg-white border border-teal-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer shadow-xs"
                         >
-                          {accessibleBranches.map((b) => (
+                          {validBranches.map((b) => (
                             <option key={b.id} value={b.id}>
                               {b.name} ({b.code}){b.status === 'Inactive' ? ' - Nonaktif' : ''}
                             </option>
                           ))}
                         </select>
+                      ) : (
+                        <span className="font-semibold text-teal-800 bg-white px-2.5 py-0.5 rounded-lg border border-teal-200 shadow-xs">
+                          {currentBranch?.name || 'Cabang Ditugaskan'} ({currentBranch?.code})
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Right: Cash Drawer Quick Status if shift is open */}
+                    {currentBranchShift && (
+                      <div className="flex items-center space-x-1.5">
+                        <button
+                          type="button"
+                          id="pos-cash-drawer-status-btn"
+                          onClick={() => openShiftModal(orderBranchId)}
+                          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-white border border-teal-200 hover:bg-teal-50 text-teal-900 text-[11px] font-medium transition-colors cursor-pointer shadow-2xs"
+                          title={`Shift Aktif (${currentBranchShift.shiftNumber}) - Klik untuk kelola laci kasir atau tutup buku`}
+                        >
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                          <span className="text-teal-700 hidden md:inline">Kas Laci:</span>
+                          <span className="font-bold font-mono text-teal-900">
+                            {formatRupiah(currentBranchShift.expectedEndingCash)}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          id="pos-trigger-drawer-btn"
+                          onClick={async () => {
+                            const res = await triggerCashDrawerOpen();
+                            showToast(
+                              res.success ? 'Sinyal buka laci kasir terkirim' : 'Simulasi laci kasir terbuka (mode web)',
+                              res.success ? 'success' : 'warning'
+                            );
+                          }}
+                          className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-medium transition-colors cursor-pointer shadow-2xs"
+                          title="Buka Laci Kasir (Drawer Kick)"
+                        >
+                          <Unlock className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                          <span className="hidden lg:inline">Buka Laci</span>
+                        </button>
                       </div>
-                    ) : (
-                      <span className="font-semibold text-teal-800 bg-white px-2.5 py-0.5 rounded-lg border border-teal-200 shadow-xs">
-                        {currentBranch?.name || 'Cabang Ditugaskan'} ({currentBranch?.code})
-                      </span>
                     )}
                   </div>
 
@@ -545,7 +603,7 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
                     <div className="col-span-full py-16 flex flex-col items-center justify-center text-center space-y-2 text-slate-400">
                       {availableProducts.length === 0 ? (
                         <>
-                          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mb-1">
+                          <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-600 mb-1">
                             <Sparkles className="w-6 h-6" />
                           </div>
                           <p className="text-xs font-bold text-slate-700">Inventaris Masih Kosong</p>
@@ -563,7 +621,7 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
                                 setIsSeeding(false);
                               }
                             }}
-                            className="mt-2 flex items-center space-x-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer transition-all disabled:opacity-50"
+                            className="mt-2 flex items-center space-x-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer transition-all disabled:opacity-50"
                           >
                             <Sparkles className="w-3.5 h-3.5" />
                             <span>{isSeeding ? 'Memuat Data...' : 'Isi 10 Produk Contoh (Seed Data)'}</span>
@@ -1019,6 +1077,18 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
                       </span>
                     </div>
                   </div>
+
+                  {currentBranchShift && (
+                    <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Laci ({currentBranch?.name}): <strong className="text-slate-700 font-mono">{formatRupiah(currentBranchShift.expectedEndingCash)}</strong></span>
+                      {settings.autoOpenCashDrawer !== false && (
+                        <span className="text-teal-700 font-medium flex items-center space-x-1">
+                          <Unlock className="w-3 h-3 inline mr-0.5" />
+                          <span>Laci terbuka otomatis</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1213,14 +1283,14 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
                   className={`p-3.5 rounded-xl border text-xs flex flex-col gap-2 ${
                     cashDrawerResult.success
                       ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <div
                         className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-                          cashDrawerResult.success ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                          cashDrawerResult.success ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'
                         }`}
                       >
                         {cashDrawerResult.success ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
@@ -1230,7 +1300,7 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
                   </div>
 
                   {!cashDrawerResult.success && (
-                    <div className="flex items-center space-x-2 pt-1.5 border-t border-amber-200">
+                    <div className="flex items-center space-x-2 pt-1.5 border-t border-slate-200">
                       <button
                         type="button"
                         onClick={async () => {
@@ -1243,11 +1313,11 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
                             });
                           }
                         }}
-                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                        className="px-2.5 py-1 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
                       >
                         Coba Buka Laci Lagi (Retry)
                       </button>
-                      <span className="text-[10px] text-amber-700">Pembayaran tetap tersimpan aman.</span>
+                      <span className="text-[10px] text-slate-500">Pembayaran tetap tersimpan aman.</span>
                     </div>
                   )}
                 </div>
@@ -1383,7 +1453,7 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
       {unregisteredBarcode && !isQuickCreateOpen && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
           <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center mx-auto">
               <Barcode className="w-6 h-6" />
             </div>
 

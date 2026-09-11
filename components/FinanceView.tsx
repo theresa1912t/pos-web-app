@@ -16,6 +16,10 @@ import {
   X,
   RotateCcw,
   Building2,
+  Receipt,
+  Vault,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 
 export function FinanceView() {
@@ -31,6 +35,10 @@ export function FinanceView() {
     activeBranch,
     accessibleBranches,
     canSwitchToAllBranches,
+    cashierShifts,
+    activeShift,
+    openShiftModal,
+    setSelectedShiftForZReport,
   } = useApp();
 
   // Date filter state - default to 30 days
@@ -45,14 +53,25 @@ export function FinanceView() {
   const [costPage, setCostPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
 
-  // Active view tab in Finance: 'overview' | 'revenues' | 'costs'
-  const [activeFinanceTab, setActiveFinanceTab] = useState<'overview' | 'revenues' | 'costs'>('overview');
+  // Active view tab in Finance: 'overview' | 'revenues' | 'costs' | 'shifts'
+  const [activeFinanceTab, setActiveFinanceTab] = useState<'overview' | 'revenues' | 'costs' | 'shifts'>('overview');
 
   // Modals
   const [isAddRevenueOpen, setIsAddRevenueOpen] = useState(false);
   const [isAddCostOpen, setIsAddCostOpen] = useState(false);
 
   // Filtered revenues & costs (filtered by Date AND Active Branch)
+  const filteredShifts = useMemo(() => {
+    return cashierShifts
+      .filter((s) => {
+        const dateStr = s.startTime.slice(0, 10);
+        const matchDate = isDateInFilter(dateStr, dateFilter, customRange);
+        const matchBranch = activeBranchId === 'all' || s.branchId === activeBranchId;
+        return matchDate && matchBranch;
+      })
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  }, [cashierShifts, dateFilter, customRange, activeBranchId]);
+
   const filteredRevenues = useMemo(() => {
     return revenues
       .filter((r) => {
@@ -216,6 +235,17 @@ export function FinanceView() {
             }`}
           >
             Daftar Biaya ({filteredCosts.length})
+          </button>
+          <button
+            onClick={() => setActiveFinanceTab('shifts')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
+              activeFinanceTab === 'shifts'
+                ? 'bg-teal-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Vault className="w-3.5 h-3.5" />
+            <span>Tutup Kasir / Shift ({filteredShifts.length})</span>
           </button>
         </div>
 
@@ -413,6 +443,125 @@ export function FinanceView() {
             itemName="pos biaya"
             className="-mx-6 -mb-6 rounded-b-2xl"
           />
+        </div>
+      )}
+
+      {/* SECTION: CASHIER SHIFTS & Z-REPORT SETTLEMENTS */}
+      {activeFinanceTab === 'shifts' && (
+        <div className="p-6 bg-white border border-slate-200 rounded-2xl space-y-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                Riwayat Shift Kasir & Tutup Buku Harian (Z-Report)
+              </h3>
+              <p className="text-xs text-slate-500">
+                Pencatatan modal kas awal, omzet tunai per kasir, arus kas keluar, dan rekonsiliasi selisih uang fisik
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openShiftModal(activeBranchId !== 'all' ? activeBranchId : undefined)}
+              className="self-start sm:self-auto flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs transition-colors cursor-pointer shadow-2xs"
+            >
+              <Vault className="w-3.5 h-3.5" />
+              <span>Buka / Kelola Shift Kasir</span>
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[11px] font-semibold border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-4">No. Shift</th>
+                  <th className="py-3 px-4">Cabang</th>
+                  <th className="py-3 px-4">Kasir</th>
+                  <th className="py-3 px-4">Waktu Buka / Tutup</th>
+                  <th className="py-3 px-4 text-right">Modal Awal</th>
+                  <th className="py-3 px-4 text-right">Penjualan Tunai</th>
+                  <th className="py-3 px-4 text-right">Kas Sistem</th>
+                  <th className="py-3 px-4 text-right">Kas Fisik</th>
+                  <th className="py-3 px-4 text-center">Status / Selisih</th>
+                  <th className="py-3 px-4 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredShifts.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="py-8 text-center text-slate-400">
+                      Tidak ada data shift kasir pada rentang waktu dan filter cabang ini.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredShifts.map((shift) => {
+                    const diff = shift.difference ?? (shift.actualEndingCash ? shift.actualEndingCash - shift.expectedEndingCash : 0);
+                    const isClosed = shift.status === 'Closed';
+                    const isKlop = isClosed && Math.abs(diff) < 1;
+                    return (
+                      <tr key={shift.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3 px-4 font-mono font-semibold text-slate-900">
+                          {shift.shiftNumber}
+                        </td>
+                        <td className="py-3 px-4 text-slate-700">
+                          {shift.branchName || 'Cabang'}
+                        </td>
+                        <td className="py-3 px-4 text-slate-900 font-medium">
+                          {shift.cashierName}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 text-[11px]">
+                          <div>Buka: {new Date(shift.startTime).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</div>
+                          {shift.endTime && (
+                            <div>Tutup: {new Date(shift.endTime).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-700">
+                          {formatRupiah(shift.startingCash)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-emerald-600 font-semibold">
+                          +{formatRupiah(shift.cashSalesTotal)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-900 font-bold">
+                          {formatRupiah(shift.expectedEndingCash)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-900">
+                          {shift.actualEndingCash !== undefined ? formatRupiah(shift.actualEndingCash) : '-'}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {!isClosed ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              ● Berjalan
+                            </span>
+                          ) : isKlop ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Klop (Rp 0)
+                            </span>
+                          ) : diff > 0 ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-teal-50 text-teal-700 border border-teal-200">
+                              +{formatRupiah(diff)}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                              -{formatRupiah(Math.abs(diff))}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedShiftForZReport(shift)}
+                            className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-colors cursor-pointer"
+                            title="Lihat Struk Z-Report"
+                          >
+                            <Receipt className="w-3.5 h-3.5 text-teal-600" />
+                            <span>Struk Z</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

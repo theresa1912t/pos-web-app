@@ -17,8 +17,11 @@ import { SettingsView } from '@/components/SettingsView';
 import { PerangkatKasirView } from '@/components/PerangkatKasirView';
 import { UserManagementView } from '@/components/UserManagementView';
 import { OmnichannelView } from '@/components/OmnichannelView';
+import { ExportDataView } from '@/components/ExportDataView';
 import { CreateOrderModal } from '@/components/CreateOrderModal';
 import { RestockModal } from '@/components/RestockModal';
+import { CashierShiftModal } from '@/components/CashierShiftModal';
+import { ZReportReceiptModal } from '@/components/ZReportReceiptModal';
 
 const emptySubscribe = () => () => {};
 
@@ -37,6 +40,8 @@ function MainAppContent() {
     activeTab,
     isCreateOrderModalOpen,
     restockModalProductId,
+    isShiftModalOpen,
+    selectedShiftForZReport,
   } = useApp();
 
   // 1. Auth Check (Login / Register view)
@@ -74,6 +79,7 @@ function MainAppContent() {
           {activeTab === 'branches' && <BranchManagementView />}
           {activeTab === 'perangkat_kasir' && <PerangkatKasirView />}
           {activeTab === 'integrasi_channel' && <OmnichannelView />}
+          {activeTab === 'export_data' && <ExportDataView />}
           {activeTab === 'users' && <UserManagementView />}
           {activeTab === 'settings' && <SettingsView />}
         </main>
@@ -82,6 +88,8 @@ function MainAppContent() {
       {/* Global Action Modals */}
       {isCreateOrderModalOpen && <CreateOrderModal />}
       {restockModalProductId && <RestockModal />}
+      {isShiftModalOpen && <CashierShiftModal />}
+      {selectedShiftForZReport && <ZReportReceiptModal />}
     </div>
   );
 }

@@ -87,6 +87,12 @@ export const APP_MODULES: ModuleMetadata[] = [
     iconName: 'Share2',
   },
   {
+    key: 'export_data',
+    name: 'Ekspor Data',
+    description: 'Unduh rekapitulasi data penjualan, katalog produk, riwayat shift kasir, dan stock opname ke format CSV Excel',
+    iconName: 'FileSpreadsheet',
+  },
+  {
     key: 'users',
     name: 'User Management',
     description: 'Manajemen staf kasir, pembuatan user, role, dan izin akses',
@@ -114,6 +120,7 @@ export const MODULE_LABELS: Record<AppModule, string> = {
   branches: 'Cabang Toko',
   perangkat_kasir: 'Perangkat Kasir',
   integrasi_channel: 'Integrasi Channel',
+  export_data: 'Ekspor Data',
   users: 'User Management',
   settings: 'Profil / Pengaturan',
 };
@@ -132,6 +139,7 @@ export const MODULE_DESCRIPTIONS: Record<AppModule, string> = {
   branches: 'Manajemen multi-cabang fisik, aktivasi, dan alamat toko',
   perangkat_kasir: 'Konfigurasi printer thermal, laci kasir (drawer), dan scanner barcode',
   integrasi_channel: 'Manajemen koneksi penjualan omnichannel resmi, pemetaan produk & sinkronisasi inventori terpusat',
+  export_data: 'Unduh rekapitulasi data penjualan, produk, shift kasir, dan stock opname format CSV Excel',
   users: 'Kelola data pengguna, role, dan pembatasan modul',
   settings: 'Identitas toko, profil akun, dan ganti kata sandi',
 };
@@ -150,6 +158,7 @@ export const FULL_PERMISSIONS: Record<AppModule, ModulePermission> = {
   branches: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   perangkat_kasir: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   integrasi_channel: { canView: true, canCreate: true, canEdit: true, canDelete: true },
+  export_data: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   users: { canView: true, canCreate: true, canEdit: true, canDelete: true },
   settings: { canView: true, canCreate: true, canEdit: true, canDelete: true },
 };
@@ -168,6 +177,7 @@ export const NO_PERMISSIONS: Record<AppModule, ModulePermission> = {
   branches: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   perangkat_kasir: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+  export_data: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
   settings: { canView: false, canCreate: false, canEdit: false, canDelete: false },
 };
@@ -201,6 +211,7 @@ export const DEFAULT_ROLES: AppRole[] = [
       branches: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       perangkat_kasir: { canView: true, canCreate: true, canEdit: true, canDelete: false },
       integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      export_data: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       settings: { canView: true, canCreate: false, canEdit: true, canDelete: false },
     },
@@ -226,6 +237,7 @@ export const DEFAULT_ROLES: AppRole[] = [
       branches: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       perangkat_kasir: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      export_data: { canView: true, canCreate: true, canEdit: false, canDelete: false },
       users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       settings: { canView: true, canCreate: false, canEdit: true, canDelete: false },
     },
@@ -251,6 +263,7 @@ export const DEFAULT_ROLES: AppRole[] = [
       branches: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       perangkat_kasir: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      export_data: { canView: true, canCreate: true, canEdit: false, canDelete: false },
       users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       settings: { canView: true, canCreate: false, canEdit: true, canDelete: false },
     },

@@ -104,7 +104,7 @@ export function InventarisView() {
           </div>
           <button
             onClick={() => setRestockModalProductId(lowStockProducts[0].id)}
-            className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center space-x-1"
+            className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center space-x-1"
           >
             <Package className="w-3.5 h-3.5" />
             <span>Restock {lowStockProducts[0].name}</span>

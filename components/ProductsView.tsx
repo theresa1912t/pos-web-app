@@ -188,10 +188,10 @@ export function ProductsView() {
             <button
               onClick={() => setShowConfirmSeed(true)}
               disabled={isSeeding}
-              className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              className="flex items-center space-x-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
               title="Populasikan inventaris dengan 10 produk contoh realistis (Indomie, Aqua, Kopi, Sembako)"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+              <Sparkles className="w-3.5 h-3.5 text-teal-600" />
               <span>{isSeeding ? 'Memuat...' : 'Seed Data Contoh'}</span>
             </button>
 
@@ -347,7 +347,7 @@ export function ProductsView() {
                       <td colSpan={9} className="py-12 px-4 text-center">
                         {products.length === 0 ? (
                           <div className="max-w-md mx-auto py-6 flex flex-col items-center text-center space-y-3">
-                            <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mb-1 shadow-xs">
+                            <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-600 mb-1 shadow-xs">
                               <Sparkles className="w-7 h-7" />
                             </div>
                             <h4 className="text-base font-bold text-slate-800">
@@ -360,7 +360,7 @@ export function ProductsView() {
                               <button
                                 onClick={handleSeedInitialData}
                                 disabled={isSeeding}
-                                className="inline-flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm shadow-amber-600/20 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
+                                className="inline-flex items-center space-x-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50"
                               >
                                 <Sparkles className="w-4 h-4" />
                                 <span>{isSeeding ? 'Sedang Memuat...' : 'Isi 10 Produk Contoh (Seed Data)'}</span>

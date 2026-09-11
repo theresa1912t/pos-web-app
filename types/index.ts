@@ -275,6 +275,19 @@ export interface ChannelSyncError {
   resolved: boolean;
 }
 
+export type SubscriptionTier = 'trial' | 'basic' | 'pro';
+
+export interface SubscriptionInfo {
+  tier: SubscriptionTier;
+  status: 'active' | 'expired' | 'grace_period';
+  expiresAt: string; // ISO String
+  activeBranchesLimit: number; // 1 for basic, 2 for pro (expandable), etc.
+  maxUsersLimit: number; // 3 for basic, 999 for pro
+  billingCycle: 'monthly' | 'yearly';
+  confirmedVia?: 'whatsapp' | 'manual';
+  notes?: string;
+}
+
 export interface BusinessSettings {
   name: string;
   phone: string;
@@ -285,6 +298,7 @@ export interface BusinessSettings {
   ownerName: string;
   ownerEmail: string;
   ownerPhone: string;
+  subscription?: SubscriptionInfo;
   // Perangkat Kasir & Hardware Integration
   printerName?: string;
   printerConnected?: boolean;
@@ -315,6 +329,7 @@ export type AppModule =
   | 'branches'
   | 'perangkat_kasir'
   | 'integrasi_channel'
+  | 'export_data'
   | 'users'
   | 'settings';
 
@@ -415,6 +430,43 @@ export type TabType =
   | 'perangkat_kasir'
   | 'stock_opname'
   | 'integrasi_channel'
+  | 'export_data'
   | 'users'
   | 'settings';
+
+export type ShiftStatus = 'Open' | 'Closed';
+
+export interface CashMovement {
+  id: string;
+  type: 'CashIn' | 'CashOut';
+  amount: number;
+  reason: string;
+  notes?: string;
+  createdAt: string;
+  cashierName?: string;
+}
+
+export interface CashierShift {
+  id: string;
+  shiftNumber: string;
+  branchId: string;
+  branchName: string;
+  cashierId: string;
+  cashierName: string;
+  status: ShiftStatus;
+  startTime: string; // ISO string
+  endTime?: string; // ISO string
+  startingCash: number; // Modal uang kembalian di laci kasir
+  cashSalesTotal: number; // Penjualan selesai dengan metode bayar Cash
+  nonCashSalesTotal: number; // Penjualan non-tunai (QRIS, Transfer, Debit)
+  cashInTotal: number; // Tambahan kas masuk selain omzet
+  cashOutTotal: number; // Pengeluaran kas kecil kasir (petty cash)
+  expectedEndingCash: number; // startingCash + cashSalesTotal + cashInTotal - cashOutTotal
+  actualEndingCash?: number; // Hitungan fisik uang oleh kasir saat tutup shift
+  difference?: number; // actualEndingCash - expectedEndingCash (0 = seimbang, >0 = lebih/surplus, <0 = kurang/minus)
+  totalOrdersCount: number;
+  cashMovements: CashMovement[];
+  notes?: string;
+  closedBy?: string;
+}
 

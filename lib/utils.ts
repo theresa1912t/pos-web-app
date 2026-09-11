@@ -55,6 +55,10 @@ export function formatTime(isoString: string): string {
   }
 }
 
+export function formatDateTime(isoString: string): string {
+  return formatDate(isoString, true);
+}
+
 export function isDateInFilter(
   dateIso: string,
   filterType: DateFilterType,

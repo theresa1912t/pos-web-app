@@ -11,6 +11,7 @@ import {
   Check,
   Lock,
 } from 'lucide-react';
+import { NotificationDropdown } from '@/components/NotificationDropdown';
 
 export function Topbar() {
   const {
@@ -45,27 +46,27 @@ export function Topbar() {
       subtitle: 'Pantau penjualan, kondisi persediaan stok barang, dan arus kas',
     },
     orders: {
-      title: 'Daftar Pesanan & Riwayat Transaksi',
+      title: 'Daftar Pesanan',
       subtitle: 'Manajemen transaksi kasir, rincian pesanan, dan cetak struk',
     },
     products: {
-      title: 'Katalog & Master Produk',
+      title: 'Katalog Produk',
       subtitle: 'Kelola data barang dan kategori',
     },
     promotions: {
-      title: 'Manajemen Promosi & Harga Coret',
+      title: 'Promosi',
       subtitle: 'Kelola diskon berkala, flash sale, program JSM, dan perlindungan margin HPP',
     },
     inventory: {
-      title: 'Inventaris & Gudang',
+      title: 'Inventaris',
       subtitle: 'Audit fisik stok opname, tata letak rak barang, dan rekonsiliasi persediaan',
     },
     stock_opname: {
-      title: 'Stock Opname & Audit Fisik',
+      title: 'Stock Opname',
       subtitle: 'Audit fisik stok per rak/kategori, rekonsiliasi selisih barang, dan penjadwalan',
     },
     finance: {
-      title: 'Laporan Keuangan & Laba Rugi',
+      title: 'Laporan Keuangan',
       subtitle: 'Pencatatan pendapatan, biaya operasional, laba bersih, dan arus kas',
     },
     branches: {
@@ -80,12 +81,16 @@ export function Topbar() {
       title: 'Integrasi Saluran (Omnichannel)',
       subtitle: 'Sinkronisasi pesanan multi-saluran',
     },
+    export_data: {
+      title: 'Ekspor Data',
+      subtitle: 'Unduh rekapitulasi data penjualan, produk, shift kasir, dan stock opname ke format CSV Excel',
+    },
     users: {
-      title: 'Manajemen Pengguna & Hak Akses',
+      title: 'Manajemen Pengguna',
       subtitle: 'Kelola akun staf, penugasan role kustom, dan izin akses modul',
     },
     settings: {
-      title: 'Pengaturan & Profil Akun',
+      title: 'Pengaturan',
       subtitle: 'Identitas usaha, data profil pemilik, dan keamanan autentikasi',
     },
   };
@@ -241,6 +246,9 @@ export function Topbar() {
                 </div>
               )}
             </div>
+
+            {/* Notification Bell Dropdown */}
+            <NotificationDropdown />
 
             {canCreateOrder && (
               <button
