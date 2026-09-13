@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useSyncExternalStore, useEffect, useRef } from 'react';
+import { AppModule } from '@/types';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { getFirstPermittedTab, getRoleDefaultLandingTab } from '@/lib/rbac';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { AuthView } from '@/components/AuthView';
 import { DashboardView } from '@/components/DashboardView';
+import { OwnerMobileMonitor } from '@/components/OwnerMobileMonitor';
 import { ProductsView } from '@/components/ProductsView';
 import { PromotionsView } from '@/components/PromotionsView';
 import { InventarisView } from '@/components/InventarisView';
@@ -48,6 +50,7 @@ function MainAppContent() {
 
   // Role-based landing & permission safeguard
   const lastUserRoleRef = useRef<string | null>(null);
+  const initialMobileCheckDoneRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!isAuthenticated || !currentUserRole) return;
@@ -56,8 +59,23 @@ function MainAppContent() {
     // When the active user's role initializes or switches, forcibly land on their designated module
     if (lastUserRoleRef.current !== userRoleKey) {
       lastUserRoleRef.current = userRoleKey;
-      const targetLanding = getRoleDefaultLandingTab(currentUserRole.id, currentUserRole);
-      if (hasPermission(targetLanding, 'view')) {
+      let targetLanding = getRoleDefaultLandingTab(currentUserRole.id, currentUserRole);
+
+      // Mobile Device Detection: If accessed via smartphone/tablet (< 768px or mobile UA) and user has dashboard view (e.g. Owner/Admin),
+      // default landing directly to 'owner_monitor'
+      const isMobileDevice = typeof window !== 'undefined' && (
+        window.innerWidth < 768 ||
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+      );
+
+      if (isMobileDevice && targetLanding === 'dashboard' && hasPermission('dashboard', 'view')) {
+        targetLanding = 'owner_monitor';
+      }
+
+      const isTargetPermitted = targetLanding === 'owner_monitor'
+        ? hasPermission('dashboard', 'view')
+        : hasPermission(targetLanding as AppModule, 'view');
+      if (isTargetPermitted) {
         setActiveTab(targetLanding);
         return;
       }
@@ -66,8 +84,25 @@ function MainAppContent() {
       return;
     }
 
+    // Secondary safeguard: on initial session mount, if user is already authenticated on mobile and on dashboard, redirect to owner_monitor
+    if (!initialMobileCheckDoneRef.current) {
+      initialMobileCheckDoneRef.current = true;
+      const isMobileDevice = typeof window !== 'undefined' && (
+        window.innerWidth < 768 ||
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+      );
+      if (isMobileDevice && activeTab === 'dashboard' && hasPermission('dashboard', 'view')) {
+        setActiveTab('owner_monitor');
+        return;
+      }
+    }
+
     // Permission safeguard: if user attempts to view an unauthorized tab, bounce immediately
-    if (!hasPermission(activeTab, 'view')) {
+    const isAuthorized = activeTab === 'owner_monitor'
+      ? hasPermission('dashboard', 'view')
+      : hasPermission(activeTab as AppModule, 'view');
+
+    if (!isAuthorized) {
       const fallback = getFirstPermittedTab(currentUserRole);
       if (fallback && fallback !== activeTab) {
         setActiveTab(fallback);
@@ -97,6 +132,7 @@ function MainAppContent() {
         {/* Dynamic Page Views */}
         <main className="flex-1 w-full px-3 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto">
           {activeTab === 'dashboard' && <DashboardView />}
+          {activeTab === 'owner_monitor' && <OwnerMobileMonitor />}
           {activeTab === 'orders' && <OrdersView />}
           {activeTab === 'products' && <ProductsView />}
           {activeTab === 'promotions' && <PromotionsView />}

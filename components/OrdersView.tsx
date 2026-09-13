@@ -110,32 +110,32 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
     <div className="space-y-4 max-w-7xl mx-auto pb-12">
       {/* Sub-Tabs: Terminal Kasir vs Riwayat Penjualan */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
-        <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80 w-full sm:w-auto">
           <button
             type="button"
             id="tab-btn-kasir-pos"
             onClick={() => setActiveSubTab('pos')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex-1 sm:flex-none justify-center ${
               activeSubTab === 'pos'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
-            <ShoppingBag className="w-4 h-4 text-teal-600" />
-            <span>Terminal Transaksi Kasir</span>
+            <ShoppingBag className="w-4 h-4 text-teal-600 shrink-0" />
+            <span className="whitespace-nowrap">Terminal Transaksi Kasir</span>
           </button>
           <button
             type="button"
             id="tab-btn-kasir-history"
             onClick={() => setActiveSubTab('history')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex-1 sm:flex-none justify-center ${
               activeSubTab === 'history'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
-            <Receipt className="w-4 h-4 text-slate-500" />
-            <span>Riwayat Penjualan ({filteredOrders.length})</span>
+            <Receipt className="w-4 h-4 text-slate-500 shrink-0" />
+            <span className="whitespace-nowrap">Riwayat Penjualan ({filteredOrders.length})</span>
           </button>
         </div>
 
@@ -144,7 +144,7 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
             type="button"
             id="btn-new-order-from-history"
             onClick={() => setActiveSubTab('pos')}
-            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer self-start sm:self-auto"
+            className="flex items-center justify-center space-x-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" />
             <span>Buat Transaksi Baru</span>
@@ -158,73 +158,74 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
         <>
           {/* Filter & Search Bar */}
           <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        {/* Search */}
-        <div className="relative flex-1 max-w-sm">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            id="orders-search-input"
-            type="text"
-            placeholder="Cari ID Pesanan, No Ref, nama produk..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-          />
-        </div>
+            {/* Search */}
+            <div className="relative w-full lg:max-w-sm">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                id="orders-search-input"
+                type="text"
+                placeholder="Cari ID Pesanan, No Ref, nama produk..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+              />
+            </div>
 
-        {/* Filters Group */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Channel Filter Select */}
-          <div className="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs">
-            <Globe className="w-3.5 h-3.5 text-slate-500" />
-            <span className="text-[11px] font-medium text-slate-600">Saluran:</span>
-            <select
-              value={channelFilter}
-              onChange={(e) => {
-                setChannelFilter(e.target.value as SalesChannel | 'all');
-                setCurrentPage(1);
-              }}
-              className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer"
-            >
-              <option value="all">Semua Saluran</option>
-              <option value="Offline / Kasir">Offline / Kasir</option>
-              <option value="Shopee">Shopee</option>
-              <option value="Tokopedia">Tokopedia</option>
-              <option value="TikTok Shop">TikTok Shop</option>
-              <option value="GoFood">GoFood</option>
-              <option value="GrabFood">GrabFood</option>
-              <option value="ShopeeFood">ShopeeFood</option>
-              <option value="Other">Lainnya</option>
-            </select>
+            {/* Filters Group */}
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              {/* Channel Filter Select */}
+              <div className="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs">
+                <Globe className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span className="text-[11px] font-medium text-slate-600 shrink-0">Saluran:</span>
+                <select
+                  value={channelFilter}
+                  onChange={(e) => {
+                    setChannelFilter(e.target.value as SalesChannel | 'all');
+                    setCurrentPage(1);
+                  }}
+                  className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Semua Saluran</option>
+                  <option value="Offline / Kasir">Offline / Kasir</option>
+                  <option value="Shopee">Shopee</option>
+                  <option value="Tokopedia">Tokopedia</option>
+                  <option value="TikTok Shop">TikTok Shop</option>
+                  <option value="GoFood">GoFood</option>
+                  <option value="GrabFood">GrabFood</option>
+                  <option value="ShopeeFood">ShopeeFood</option>
+                  <option value="Other">Lainnya</option>
+                </select>
+              </div>
+
+              {/* Date Filter Dropdown */}
+              <DateRangeDropdown
+                value={dateFilter}
+                onChange={(val) => {
+                  setDateFilter(val);
+                  setCurrentPage(1);
+                }}
+                customRange={customRange}
+                onCustomRangeChange={setCustomRange}
+                includeAllOption={true}
+              />
+
+              {/* Quick dummy data reload button */}
+              <button
+                type="button"
+                id="btn-seed-orders-dummy"
+                onClick={() => resetToDemoData()}
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 text-xs font-medium transition-colors cursor-pointer"
+                title="Muat ulang 36+ pesanan contoh dari berbagai saluran (Shopee, Tokopedia, TikTok, GrabFood, Offline)"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                <span className="hidden sm:inline">Muat Data Dummy (36+ Order)</span>
+                <span className="sm:hidden">Reset Dummy</span>
+              </button>
+            </div>
           </div>
-
-          {/* Date Filter Dropdown */}
-          <DateRangeDropdown
-            value={dateFilter}
-            onChange={(val) => {
-              setDateFilter(val);
-              setCurrentPage(1);
-            }}
-            customRange={customRange}
-            onCustomRangeChange={setCustomRange}
-            includeAllOption={true}
-          />
-
-          {/* Quick dummy data reload button */}
-          <button
-            type="button"
-            id="btn-seed-orders-dummy"
-            onClick={() => resetToDemoData()}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 text-xs font-medium transition-colors cursor-pointer"
-            title="Muat ulang 36+ pesanan contoh dari berbagai saluran (Shopee, Tokopedia, TikTok, GrabFood, Offline)"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-teal-600" />
-            <span className="hidden sm:inline">Muat Data Dummy (36+ Order)</span>
-          </button>
-        </div>
-      </div>
 
       {/* Orders Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">

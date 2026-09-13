@@ -89,6 +89,8 @@ export interface Category {
   name: string;
 }
 
+export type ProductCategory = Category;
+
 export interface Rack {
   id: string;
   branchId?: string;
@@ -170,6 +172,11 @@ export interface RestockRecord {
   newCogs: number;
   date: string; // ISO String
   notes?: string;
+}
+
+export interface CartItem {
+  product: Product;
+  quantity: number;
 }
 
 export interface OrderItem {
@@ -421,6 +428,7 @@ export interface DateRange {
 
 export type TabType =
   | 'dashboard'
+  | 'owner_monitor'
   | 'orders'
   | 'products'
   | 'promotions'

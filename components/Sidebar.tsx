@@ -24,6 +24,7 @@ import {
   BadgePercent,
   Zap,
   FileSpreadsheet,
+  Smartphone,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -74,6 +75,12 @@ export function Sidebar({ isMobileDrawer = false }: SidebarProps) {
       id: 'dashboard' as const,
       label: 'Dashboard',
       icon: LayoutDashboard,
+      visible: hasPermission('dashboard', 'view'),
+    },
+    {
+      id: 'owner_monitor' as const,
+      label: 'Pantau Toko (HP)',
+      icon: Smartphone,
       visible: hasPermission('dashboard', 'view'),
     },
     {

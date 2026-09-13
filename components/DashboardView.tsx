@@ -20,6 +20,7 @@ import {
   ExternalLink,
   Plus,
   Building2,
+  Smartphone,
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -185,6 +186,30 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 text-slate-900">
+      {/* Mobile Switch Banner: If user is on mobile screen, provide quick jump to Mode Pantau */}
+      <div className="sm:hidden bg-teal-50/90 border border-teal-200 rounded-2xl p-3 flex items-center justify-between gap-2 shadow-2xs">
+        <div className="flex items-center space-x-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+            <Smartphone className="w-3.5 h-3.5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-teal-900 truncate">
+              Mode Pantau Khusus HP
+            </p>
+            <p className="text-[11px] text-teal-700 truncate">
+              Tampilan ringan & fokus performa hari ini
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab('owner_monitor')}
+          className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shrink-0 cursor-pointer shadow-2xs transition-colors"
+        >
+          Buka
+        </button>
+      </div>
+
       {/* Date Filter */}
       <div className="flex justify-start">
         <DateRangeDropdown
@@ -527,10 +552,10 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
                 recentOrders.map((ord) => (
                   <div
                     key={ord.id}
-                    className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3 text-xs"
+                    className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 text-xs"
                   >
-                    <div>
-                      <div className="font-semibold text-slate-800 flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
                         <span>{ord.id}</span>
                         <SalesChannelBadge channel={ord.salesChannel || 'Offline / Kasir'} size="sm" />
                         <span
@@ -543,7 +568,7 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
                           {ord.status === 'Finished' ? 'SUKSES' : 'BATAL'}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
+                      <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
                         <span>{formatTime(ord.createdAt)}</span>
                         <span>•</span>
                         <span className="font-medium text-slate-600">
@@ -571,7 +596,7 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center justify-between sm:justify-end space-x-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                       <span className="font-bold text-slate-900 text-sm">
                         {formatRupiah(ord.total)}
                       </span>
@@ -583,7 +608,7 @@ export function DashboardView({ onViewOrder }: DashboardViewProps) {
                             setActiveTab('orders');
                           }
                         }}
-                        className="text-xs font-semibold text-teal-600 hover:bg-teal-50 p-1.5 rounded-lg transition-colors cursor-pointer"
+                        className="text-xs font-semibold text-teal-600 hover:bg-teal-50 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
                         title="Lihat Detail Pesanan"
                       >
                         Detail

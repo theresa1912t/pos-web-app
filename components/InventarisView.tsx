@@ -88,12 +88,12 @@ export function InventarisView() {
 
       {/* Low Stock Notification Banner if any */}
       {lowStockProducts.length > 0 && (
-        <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-2xl flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+        <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center space-x-3 min-w-0 flex-1">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
               <AlertTriangle className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-bold text-amber-900">
                 {lowStockProducts.length} Produk Mencapai Batas Minimum Stok
               </p>
@@ -104,7 +104,7 @@ export function InventarisView() {
           </div>
           <button
             onClick={() => setRestockModalProductId(lowStockProducts[0].id)}
-            className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center space-x-1"
+            className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center space-x-1 shrink-0 self-start sm:self-auto"
           >
             <Package className="w-3.5 h-3.5" />
             <span>Restock {lowStockProducts[0].name}</span>

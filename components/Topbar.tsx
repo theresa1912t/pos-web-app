@@ -10,6 +10,8 @@ import {
   ChevronDown,
   Check,
   Lock,
+  Smartphone,
+  LayoutDashboard,
 } from 'lucide-react';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
 
@@ -45,6 +47,10 @@ export function Topbar() {
     dashboard: {
       title: 'Dashboard Warung',
       subtitle: 'Pantau penjualan, kondisi persediaan stok barang, dan arus kas',
+    },
+    owner_monitor: {
+      title: 'Pantau Toko (Mobile)',
+      subtitle: 'Ringkasan penjualan real-time, laci kasir, dan audit cepat via HP',
     },
     orders: {
       title: 'Kasir (Point of Sale)',
@@ -131,7 +137,7 @@ export function Topbar() {
           </div>
 
           {/* Right: Branch Selector, Role Badge & Quick Action */}
-          <div className="flex items-center space-x-2.5 sm:space-x-3 shrink-0">
+          <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
             {/* Branch Context Selector */}
             <div className="relative" ref={branchDropdownRef}>
               {canSwitchToAllBranches ? (
@@ -139,12 +145,12 @@ export function Topbar() {
                   <button
                     type="button"
                     onClick={() => setIsBranchDropdownOpen(!isBranchDropdownOpen)}
-                    className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-800 transition-all cursor-pointer shadow-2xs"
+                    className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-800 transition-all cursor-pointer shadow-2xs"
                     aria-haspopup="listbox"
                     aria-expanded={isBranchDropdownOpen}
                   >
                     <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                    <span className="font-semibold truncate max-w-[130px] sm:max-w-[170px]">
+                    <span className="font-semibold truncate max-w-[80px] xs:max-w-[120px] sm:max-w-[170px]">
                       {activeBranchId === 'all'
                         ? 'Semua Cabang'
                         : activeBranch?.name || 'Pilih Cabang'}
@@ -248,6 +254,33 @@ export function Topbar() {
               )}
             </div>
 
+            {/* Quick Mobile Monitor Toggle for Owner/Dashboard Viewers */}
+            {hasPermission('dashboard', 'view') && (
+              activeTab === 'owner_monitor' ? (
+                <button
+                  type="button"
+                  id="topbar-switch-dashboard-btn"
+                  onClick={() => setActiveTab('dashboard')}
+                  className="flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors cursor-pointer shrink-0"
+                  title="Kembali ke Dashboard Lengkap"
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                  <span className="hidden sm:inline">Menu Lengkap</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  id="topbar-switch-monitor-btn"
+                  onClick={() => setActiveTab('owner_monitor')}
+                  className="flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors cursor-pointer shrink-0"
+                  title="Buka Mode Pantau HP (Ringkasan Real-Time)"
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                  <span className="hidden sm:inline">Pantau HP</span>
+                </button>
+              )
+            )}
+
             {/* Notification Bell Dropdown */}
             <NotificationDropdown />
 
@@ -258,10 +291,11 @@ export function Topbar() {
                   setActiveTab('orders');
                   setIsCreateOrderModalOpen(false);
                 }}
-                className="flex items-center space-x-1.5 sm:space-x-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold shadow-xs shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer whitespace-nowrap"
+                className="flex items-center space-x-1 sm:space-x-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold shadow-xs shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer whitespace-nowrap"
               >
-                <Plus className="w-4 h-4" />
-                <span>Buka Kasir</span>
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="hidden sm:inline">Buka Kasir</span>
+                <span className="sm:hidden">Kasir</span>
               </button>
             )}
           </div>
