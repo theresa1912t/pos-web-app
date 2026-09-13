@@ -36,9 +36,10 @@ import {
 interface CreateOrderModalProps {
   isOpen?: boolean;
   onClose?: () => void;
+  isFullPage?: boolean;
 }
 
-export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
+export function CreateOrderModal({ onClose, isFullPage = false }: CreateOrderModalProps) {
   const {
     products,
     promotions,
@@ -363,8 +364,20 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
   }, [totalAmount]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-5xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[92vh]">
+    <div
+      className={
+        isFullPage
+          ? 'w-full relative'
+          : 'fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150'
+      }
+    >
+      <div
+        className={`relative w-full bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col ${
+          isFullPage
+            ? 'shadow-xs min-h-[720px] lg:h-[calc(100vh-165px)]'
+            : 'max-w-5xl shadow-2xl h-[92vh]'
+        }`}
+      >
         {/* Top Toast Banner for Barcode feedback */}
         {scanToast && (
           <div
@@ -386,10 +399,10 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
         )}
 
         {/* Top Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-200 bg-slate-50/50">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center">
-              <ShoppingBag className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center">
+              <ShoppingBag className="w-4.5 h-4.5" />
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold text-slate-900">
@@ -442,12 +455,42 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
             </div>
           )}
 
-          <button
-            onClick={handleClose}
-            className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {isFullPage ? (
+            step === 1 && cart.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setCart([])}
+                className="text-xs text-rose-600 hover:text-rose-700 px-3 py-1.5 rounded-xl hover:bg-rose-50 border border-rose-200/60 font-semibold transition-colors cursor-pointer"
+                title="Kosongkan keranjang belanja"
+              >
+                Kosongkan Keranjang
+              </button>
+            ) : step === 2 || step === 3 ? (
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="text-xs text-slate-600 hover:text-slate-800 px-3 py-1.5 rounded-xl hover:bg-slate-100 border border-slate-200 font-semibold transition-colors cursor-pointer"
+              >
+                Kembali ke Keranjang
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleClose}
+                className="text-xs text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Riwayat Transaksi &rarr;
+              </button>
+            )
+          ) : (
+            <button
+              onClick={handleClose}
+              className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              title="Tutup Kasir"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Modal Main Area */}
@@ -1427,7 +1470,7 @@ export function CreateOrderModal({ onClose }: CreateOrderModalProps) {
                     onClick={handleClose}
                     className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
                   >
-                    Selesai & Tutup
+                    {isFullPage ? 'Ke Riwayat Transaksi' : 'Selesai & Tutup'}
                   </button>
                 </div>
               </div>

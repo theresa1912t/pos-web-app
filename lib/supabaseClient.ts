@@ -19,6 +19,8 @@ import {
   ChannelSyncError,
   Branch,
   ProductInventory,
+  CustomerReceivable,
+  SupplierPayable,
 } from '@/types';
 import {
   INITIAL_CATEGORIES,
@@ -37,6 +39,8 @@ import {
   INITIAL_CHANNEL_SYNC_ERRORS,
   INITIAL_BRANCHES,
   INITIAL_PRODUCT_INVENTORIES,
+  INITIAL_CUSTOMER_RECEIVABLES,
+  INITIAL_SUPPLIER_PAYABLES,
   generateProductInventories,
 } from '@/lib/storage';
 import { DEFAULT_ROLES, STAGING_INITIAL_USERS } from '@/lib/rbac';
@@ -84,6 +88,8 @@ export interface UserDatabaseState {
   roles: AppRole[];
   users: AppUser[];
   onboardingCompleted: boolean;
+  customerReceivables?: CustomerReceivable[];
+  supplierPayables?: SupplierPayable[];
   channelIntegrations?: ChannelIntegration[];
   productMappings?: ProductChannelMapping[];
   channelSyncErrors?: ChannelSyncError[];
@@ -94,14 +100,7 @@ export const STAGING_EMAIL = 'staging@example.com';
 export const STAGING_USER_ID = 'usr-staging-0000-0000-000000000000';
 
 export function isStagingUser(email?: string, userId?: string): boolean {
-  if (!email && !userId) return false;
-  const em = (email || '').toLowerCase().trim();
-  return em === STAGING_EMAIL.toLowerCase() ||
-         em === 'tenmatheresa96@gmail.com' ||
-         em.includes('staging') ||
-         em.includes('test') ||
-         em.includes('demo') ||
-         userId === STAGING_USER_ID;
+  return true; // Single internal client system: all roles share the same store database
 }
 
 export function getStagingInitialData(): UserDatabaseState {
@@ -131,6 +130,8 @@ export function getStagingInitialData(): UserDatabaseState {
     },
     roles: JSON.parse(JSON.stringify(DEFAULT_ROLES)),
     users: JSON.parse(JSON.stringify(STAGING_INITIAL_USERS)),
+    customerReceivables: JSON.parse(JSON.stringify(INITIAL_CUSTOMER_RECEIVABLES)),
+    supplierPayables: JSON.parse(JSON.stringify(INITIAL_SUPPLIER_PAYABLES)),
     onboardingCompleted: true,
     channelIntegrations: JSON.parse(JSON.stringify(INITIAL_CHANNEL_INTEGRATIONS)),
     productMappings: JSON.parse(JSON.stringify(INITIAL_PRODUCT_MAPPINGS)),
@@ -149,7 +150,7 @@ export function getNewClientInitialData(name: string, email: string, username: s
     roleId: 'role-owner-admin',
     status: 'active',
     createdAt: new Date().toISOString(),
-    onboardingCompleted: false,
+    onboardingCompleted: true,
   };
 
   const newClientBranches: Branch[] = [
@@ -206,7 +207,9 @@ export function getNewClientInitialData(name: string, email: string, username: s
     },
     roles: JSON.parse(JSON.stringify(DEFAULT_ROLES)),
     users: [initialOwnerUser],
-    onboardingCompleted: false,
+    customerReceivables: [],
+    supplierPayables: [],
+    onboardingCompleted: true,
     channelIntegrations: INITIAL_CHANNEL_INTEGRATIONS.map(c => ({
       ...c,
       connectionStatus: 'disconnected',
@@ -222,18 +225,20 @@ export function getNewClientInitialData(name: string, email: string, username: s
   };
 }
 
-// Local user-data store manager ensuring zero data bleeding
+// Local user-data store manager for client business
 export const localUserDataStore = {
   getUserData(userId: string, email: string, name: string, username?: string): UserDatabaseState {
     if (typeof window === 'undefined') return getStagingInitialData();
     try {
-      const key = `warung_user_db_${userId}`;
+      const key = 'warung_pos_primary_db';
       const saved = localStorage.getItem(key);
       if (saved) {
         const parsed: UserDatabaseState = JSON.parse(saved);
 
-        // If staging user, check if data needs to be upgraded to version 3 (with 28 products, 36+ orders, 10 restocks, 30 days finance & 3 opnames)
-        if (isStagingUser(email, userId) && (!parsed.dataVersion || parsed.dataVersion < 3 || !parsed.products || parsed.products.length < 20 || !parsed.orders || parsed.orders.length < 30)) {
+        parsed.onboardingCompleted = true;
+
+        // Upgrade data if needed
+        if (!parsed.dataVersion || parsed.dataVersion < 3 || !parsed.products || parsed.products.length < 20 || !parsed.orders || parsed.orders.length < 30) {
           const updated = getStagingInitialData();
           localStorage.setItem(key, JSON.stringify(updated));
           return updated;
@@ -252,10 +257,26 @@ export const localUserDataStore = {
           parsed.productInventories = generateProductInventories(parsed.products, parsed.branches);
         }
 
-        // Ensure roles, users, racks, stockOpnames exist in older stored states
-        if (!parsed.roles || parsed.roles.length === 0) {
-          parsed.roles = JSON.parse(JSON.stringify(DEFAULT_ROLES));
+        // Always enforce and update system roles to the latest strict RBAC rules
+        const existingRoles = parsed.roles || [];
+        const updatedRoles = existingRoles.map((exRole) => {
+          const matchDefault = DEFAULT_ROLES.find((dr) => dr.id === exRole.id);
+          if (matchDefault) {
+            return {
+              ...exRole,
+              permissions: JSON.parse(JSON.stringify(matchDefault.permissions)),
+            };
+          }
+          return exRole;
+        });
+        for (const defRole of DEFAULT_ROLES) {
+          if (!updatedRoles.some((r) => r.id === defRole.id)) {
+            updatedRoles.push(JSON.parse(JSON.stringify(defRole)));
+          }
         }
+        parsed.roles = updatedRoles;
+
+        // Ensure racks, stockOpnames exist in older stored states
         if (!parsed.racks || parsed.racks.length === 0) {
           parsed.racks = JSON.parse(JSON.stringify(INITIAL_RACKS));
         }
@@ -287,50 +308,41 @@ export const localUserDataStore = {
           }));
         }
         if (!parsed.users || parsed.users.length === 0) {
-          if (email.toLowerCase() === STAGING_EMAIL.toLowerCase() || userId === STAGING_USER_ID) {
-            parsed.users = JSON.parse(JSON.stringify(STAGING_INITIAL_USERS));
-          } else {
-            parsed.users = [
-              {
-                id: userId,
-                authUserId: userId,
-                name: name || parsed.settings.ownerName || 'Pemilik Usaha',
-                username: username || 'admin',
-                email: email || parsed.settings.ownerEmail,
-                roleId: 'role-owner-admin',
-                status: 'active',
-                createdAt: new Date().toISOString(),
-                onboardingCompleted: parsed.onboardingCompleted,
-              },
-            ];
-          }
+          parsed.users = JSON.parse(JSON.stringify(STAGING_INITIAL_USERS));
+        } else {
+          // Sync default staging users branchAccess and roleId
+          parsed.users = parsed.users.map((u) => {
+            const stagingMatch = STAGING_INITIAL_USERS.find((su) => su.id === u.id || su.username === u.username);
+            if (stagingMatch) {
+              return {
+                ...u,
+                roleId: stagingMatch.roleId,
+                branchAccess: stagingMatch.branchAccess,
+              };
+            }
+            return u;
+          });
         }
         return parsed;
       }
 
-      // If staging user, initialize with rich realistic dummy data
-      if (isStagingUser(email, userId)) {
-        const initial = getStagingInitialData();
-        localStorage.setItem(key, JSON.stringify(initial));
-        return initial;
-      }
-
-      // New client user: start isolated with blank business data and uncompleted onboarding
-      const initial = getNewClientInitialData(name, email, username);
+      // Initialize with store data
+      const initial = getStagingInitialData();
       localStorage.setItem(key, JSON.stringify(initial));
       return initial;
     } catch {
-      return getNewClientInitialData(name, email, username);
+      return getStagingInitialData();
     }
   },
 
   saveUserData(userId: string, data: UserDatabaseState): void {
     if (typeof window === 'undefined') return;
     try {
-      const key = `warung_user_db_${userId}`;
+      const key = 'warung_pos_primary_db';
+      data.onboardingCompleted = true;
       localStorage.setItem(key, JSON.stringify(data));
     } catch (e) {
-      console.error('Failed to save isolated user data:', e);
+      console.error('Failed to save business data:', e);
     }
   },
 };

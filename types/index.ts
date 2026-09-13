@@ -275,7 +275,7 @@ export interface ChannelSyncError {
   resolved: boolean;
 }
 
-export type SubscriptionTier = 'trial' | 'basic' | 'pro';
+export type SubscriptionTier = 'trial' | 'basic' | 'pro' | 'enterprise';
 
 export interface SubscriptionInfo {
   tier: SubscriptionTier;
@@ -444,6 +444,59 @@ export interface CashMovement {
   notes?: string;
   createdAt: string;
   cashierName?: string;
+}
+
+export interface ReceivablePayment {
+  id: string;
+  amount: number;
+  paymentMethod: 'Cash' | 'Transfer' | 'QRIS';
+  paymentDate: string; // ISO string
+  receivedBy?: string;
+  notes?: string;
+}
+
+export interface CustomerReceivable {
+  id: string;
+  branchId?: string;
+  branchName?: string;
+  customerName: string;
+  customerPhone?: string;
+  notes?: string;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  status: 'Unpaid' | 'Partial' | 'Paid';
+  dueDate: string; // YYYY-MM-DD
+  createdAt: string; // ISO string
+  orderId?: string;
+  payments: ReceivablePayment[];
+}
+
+export interface PayablePayment {
+  id: string;
+  amount: number;
+  paymentMethod: 'Cash' | 'Transfer';
+  paymentDate: string; // ISO string
+  paidBy?: string;
+  notes?: string;
+}
+
+export interface SupplierPayable {
+  id: string;
+  branchId?: string;
+  branchName?: string;
+  supplierName: string;
+  invoiceNumber?: string;
+  supplierPhone?: string;
+  notes?: string;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  status: 'Unpaid' | 'Partial' | 'Paid';
+  dueDate: string; // YYYY-MM-DD
+  createdAt: string; // ISO string
+  restockId?: string;
+  payments: PayablePayment[];
 }
 
 export interface CashierShift {

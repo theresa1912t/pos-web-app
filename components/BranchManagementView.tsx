@@ -23,8 +23,6 @@ import {
   Calendar,
   Zap,
 } from 'lucide-react';
-import { SubscriptionModal } from '@/components/SubscriptionModal';
-import { SubscriptionTier } from '@/types';
 
 export function BranchManagementView() {
   const {
@@ -46,9 +44,6 @@ export function BranchManagementView() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
-  
-  // Subscription modal state
-  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -90,15 +85,6 @@ export function BranchManagementView() {
   }, [branches, productInventories]);
 
   const openAddModal = () => {
-    // Check branch quota according to subscription tier
-    const activeBranchesCount = branches.filter((b) => b.status === 'Active').length;
-    const maxBranches = settings.subscription?.activeBranchesLimit || 1;
-
-    if (activeBranchesCount >= maxBranches) {
-      setIsSubscriptionModalOpen(true);
-      return;
-    }
-
     setEditingBranch(null);
     setFormName('');
     setFormCode(`CBG-0${branches.length + 1}`);
@@ -631,36 +617,6 @@ export function BranchManagementView() {
           </div>
         </div>
       )}
-
-      {/* Upgrade / Subscription Modal if branch limit reached */}
-      <SubscriptionModal
-        isOpen={isSubscriptionModalOpen}
-        onClose={() => setIsSubscriptionModalOpen(false)}
-        currentTier={settings.subscription?.tier || 'trial'}
-        storeName={settings.name || 'Warung Juara'}
-        ownerName={settings.ownerName || user?.name || 'Owner'}
-        onSelectPlan={async (tier: SubscriptionTier) => {
-          const updatedSettings = {
-            ...settings,
-            subscription: {
-              ...(settings.subscription || {
-                tier: 'trial',
-                status: 'active' as const,
-                expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-                activeBranchesLimit: 1,
-                maxUsersLimit: 3,
-                billingCycle: 'monthly' as const,
-              }),
-              tier,
-              status: 'active' as const,
-              activeBranchesLimit: tier === 'pro' ? 2 : 1,
-              maxUsersLimit: tier === 'pro' ? 999 : 3,
-              expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            },
-          };
-          await updateSettings(updatedSettings);
-        }}
-      />
     </div>
   );
 }

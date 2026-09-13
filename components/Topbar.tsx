@@ -16,6 +16,7 @@ import { NotificationDropdown } from '@/components/NotificationDropdown';
 export function Topbar() {
   const {
     activeTab,
+    setActiveTab,
     hasPermission,
     setIsMobileNavOpen,
     setIsCreateOrderModalOpen,
@@ -46,8 +47,8 @@ export function Topbar() {
       subtitle: 'Pantau penjualan, kondisi persediaan stok barang, dan arus kas',
     },
     orders: {
-      title: 'Daftar Pesanan',
-      subtitle: 'Manajemen transaksi kasir, rincian pesanan, dan cetak struk',
+      title: 'Kasir (Point of Sale)',
+      subtitle: 'Terminal transaksi kasir, katalog produk cepat, dan riwayat transaksi penjualan',
     },
     products: {
       title: 'Katalog Produk',
@@ -238,7 +239,7 @@ export function Topbar() {
                 <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">
                   <Building2 className="w-3.5 h-3.5 text-slate-500" />
                   <span className="font-medium truncate max-w-[120px] sm:max-w-[150px]">
-                    {activeBranch?.name || 'Cabang Ditugaskan'}
+                    {activeBranch?.name || accessibleBranches[0]?.name || 'Cabang Ditugaskan'}
                   </span>
                   <span title="Terkunci ke cabang penugasan Anda" className="inline-flex">
                     <Lock className="w-3 h-3 text-slate-400" />
@@ -250,14 +251,17 @@ export function Topbar() {
             {/* Notification Bell Dropdown */}
             <NotificationDropdown />
 
-            {canCreateOrder && (
+            {canCreateOrder && activeTab !== 'orders' && (
               <button
                 id="topbar-create-order-btn"
-                onClick={() => setIsCreateOrderModalOpen(true)}
-                className="flex items-center space-x-1.5 sm:space-x-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold shadow-sm shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer whitespace-nowrap"
+                onClick={() => {
+                  setActiveTab('orders');
+                  setIsCreateOrderModalOpen(false);
+                }}
+                className="flex items-center space-x-1.5 sm:space-x-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold shadow-xs shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" />
-                <span>Buat Pesanan</span>
+                <span>Buka Kasir</span>
               </button>
             )}
           </div>

@@ -1,4 +1,4 @@
-import { AppModule, AppRole, AppUser, ModulePermission } from '@/types';
+import { AppModule, AppRole, AppUser, ModulePermission, TabType } from '@/types';
 
 export interface ModuleMetadata {
   key: AppModule;
@@ -198,22 +198,48 @@ export const DEFAULT_ROLES: AppRole[] = [
     description: 'Melayani transaksi pesanan kasir, melihat katalog produk & mencetak struk belanja.',
     isSystem: false,
     permissions: {
-      dashboard: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      dashboard: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       orders: { canView: true, canCreate: true, canEdit: true, canDelete: false },
       products: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      promotions: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      inventory: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      categories: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      racks: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      stock_opname: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      promotions: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      inventory: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      categories: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      racks: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      stock_opname: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       restock: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       finance: { canView: false, canCreate: false, canEdit: false, canDelete: false },
-      branches: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      branches: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       perangkat_kasir: { canView: true, canCreate: true, canEdit: true, canDelete: false },
       integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       export_data: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
-      settings: { canView: true, canCreate: false, canEdit: true, canDelete: false },
+      settings: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'role-supervisor',
+    name: 'Supervisor / Manager Toko',
+    description: 'Pantau operasional toko harian, otorisasi transaksi kasir, kelola katalog produk, stok opname, dan piutang.',
+    isSystem: false,
+    permissions: {
+      dashboard: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      orders: { canView: true, canCreate: true, canEdit: true, canDelete: true },
+      products: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      promotions: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      inventory: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      categories: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      racks: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      stock_opname: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      restock: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      finance: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      branches: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      perangkat_kasir: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      export_data: { canView: true, canCreate: true, canEdit: false, canDelete: false },
+      users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      settings: { canView: false, canCreate: false, canEdit: false, canDelete: false },
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -224,22 +250,22 @@ export const DEFAULT_ROLES: AppRole[] = [
     description: 'Akses laporan keuangan, pencatatan biaya operasional, pendapatan, dan laba rugi.',
     isSystem: false,
     permissions: {
-      dashboard: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      dashboard: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       orders: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      products: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      promotions: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      inventory: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      categories: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      products: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      promotions: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      inventory: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      categories: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       racks: { canView: false, canCreate: false, canEdit: false, canDelete: false },
-      stock_opname: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      restock: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      stock_opname: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      restock: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       finance: { canView: true, canCreate: true, canEdit: true, canDelete: true },
-      branches: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      branches: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       perangkat_kasir: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       export_data: { canView: true, canCreate: true, canEdit: false, canDelete: false },
       users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
-      settings: { canView: true, canCreate: false, canEdit: true, canDelete: false },
+      settings: { canView: false, canCreate: false, canEdit: false, canDelete: false },
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -250,22 +276,22 @@ export const DEFAULT_ROLES: AppRole[] = [
     description: 'Kelola master barang, kategori produk, penempatan rak, stock opname, dan pencatatan restock barang masuk.',
     isSystem: false,
     permissions: {
-      dashboard: { canView: true, canCreate: false, canEdit: false, canDelete: false },
-      orders: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      dashboard: { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      orders: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       products: { canView: true, canCreate: true, canEdit: true, canDelete: false },
-      promotions: { canView: true, canCreate: true, canEdit: true, canDelete: false },
+      promotions: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       inventory: { canView: true, canCreate: true, canEdit: true, canDelete: true },
       categories: { canView: true, canCreate: true, canEdit: true, canDelete: false },
       racks: { canView: true, canCreate: true, canEdit: true, canDelete: true },
       stock_opname: { canView: true, canCreate: true, canEdit: true, canDelete: true },
       restock: { canView: true, canCreate: true, canEdit: true, canDelete: false },
       finance: { canView: false, canCreate: false, canEdit: false, canDelete: false },
-      branches: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      branches: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       perangkat_kasir: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       integrasi_channel: { canView: false, canCreate: false, canEdit: false, canDelete: false },
-      export_data: { canView: true, canCreate: true, canEdit: false, canDelete: false },
+      export_data: { canView: false, canCreate: false, canEdit: false, canDelete: false },
       users: { canView: false, canCreate: false, canEdit: false, canDelete: false },
-      settings: { canView: true, canCreate: false, canEdit: true, canDelete: false },
+      settings: { canView: false, canCreate: false, canEdit: false, canDelete: false },
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -307,9 +333,22 @@ export const STAGING_INITIAL_USERS: AppUser[] = [
     email: 'akuntan_budi@warung.internal',
     phone: '085712345678',
     roleId: 'role-finance',
-    branchAccess: ['*'],
+    branchAccess: ['branch-1'],
     status: 'active',
     createdAt: new Date(Date.now() - 10 * 86400000).toISOString(),
+    onboardingCompleted: true,
+  },
+  {
+    id: 'usr-spv-dimas',
+    authUserId: 'usr-spv-dimas',
+    name: 'Dimas Setiawan',
+    username: 'spv_dimas',
+    email: 'spv_dimas@warung.internal',
+    phone: '081399887766',
+    roleId: 'role-supervisor',
+    branchAccess: ['branch-1'],
+    status: 'active',
+    createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
     onboardingCompleted: true,
   },
   {
@@ -320,7 +359,7 @@ export const STAGING_INITIAL_USERS: AppUser[] = [
     email: 'gudang_agus@warung.internal',
     phone: '087811223344',
     roleId: 'role-gudang',
-    branchAccess: ['branch-1', 'branch-2'],
+    branchAccess: ['branch-1'],
     status: 'active',
     createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
     onboardingCompleted: true,
@@ -432,6 +471,7 @@ export const credentialsStore = {
       'KasirWarung2026!',
       'FinanceWarung2026!',
       'GudangWarung2026!',
+      'SpvWarung2026!',
     ];
     if (validPasswords.includes(password)) {
       return true;
@@ -453,6 +493,7 @@ export const credentialsStore = {
         (input === 'staging' && u.email === 'staging@example.com') ||
         (input === 'owner' && u.id.includes('staging')) ||
         (input === 'kasir1' && u.id.includes('kasir')) ||
+        (input === 'spv1' && u.id.includes('spv')) ||
         (input === 'finance1' && u.id.includes('finance')) ||
         (input === 'gudang1' && u.id.includes('gudang'))
       );
@@ -468,7 +509,8 @@ export const credentialsStore = {
           password === 'StagingDemo2026!' ||
           password === 'KasirWarung2026!' ||
           password === 'FinanceWarung2026!' ||
-          password === 'GudangWarung2026!'
+          password === 'GudangWarung2026!' ||
+          password === 'SpvWarung2026!'
         ) {
           return demoUser;
         }
@@ -605,10 +647,10 @@ export function canAccessAllBranches(
   user?: { roleId?: string; branchAccess?: string[] } | null,
   role?: AppRole | null
 ): boolean {
-  if (!user) return true;
+  if (!user) return false;
+  // STRICT RULE: Only Owner / Admin can switch or access all branches
   if (user.roleId === 'role-owner-admin' || role?.id === 'role-owner-admin') return true;
-  if (!user.branchAccess || user.branchAccess.length === 0) return true;
-  return user.branchAccess.includes('*');
+  return false;
 }
 
 export function hasBranchAccess(
@@ -616,10 +658,65 @@ export function hasBranchAccess(
   branchId?: string | null,
   role?: AppRole | null
 ): boolean {
-  if (!branchId || branchId === 'all') return canAccessAllBranches(user, role);
-  if (!user) return true;
+  if (!user) return false;
   if (user.roleId === 'role-owner-admin' || role?.id === 'role-owner-admin') return true;
-  if (!user.branchAccess || user.branchAccess.length === 0) return true;
-  return user.branchAccess.includes('*') || user.branchAccess.includes(branchId);
+  if (!branchId || branchId === 'all') return false;
+  if (!user.branchAccess || user.branchAccess.length === 0) return false;
+  return user.branchAccess.includes(branchId);
 }
+
+/**
+ * Determine primary landing module based on role
+ * - Kasir lands directly on POS/Kasir ('orders')
+ * - Staff Gudang lands on Inventori & Stok ('inventory')
+ * - Finance lands on Keuangan & Akuntansi ('finance')
+ * - Supervisor lands on Dashboard ('dashboard')
+ * - Owner / Admin lands on Dashboard ('dashboard')
+ */
+export function getRoleDefaultLandingTab(roleId?: string, role?: AppRole | null): TabType {
+  const rId = roleId || role?.id;
+  if (rId === 'role-kasir') return 'orders';
+  if (rId === 'role-gudang') return 'inventory';
+  if (rId === 'role-finance') return 'finance';
+  if (rId === 'role-supervisor') return 'dashboard';
+  if (rId === 'role-owner-admin') return 'dashboard';
+  return 'orders';
+}
+
+/**
+ * Get safe tab to render for a role - respects permissions and avoids blank/unauthorized screens
+ */
+export function getFirstPermittedTab(role?: AppRole | null): TabType {
+  if (!role || role.id === 'role-owner-admin') return 'dashboard';
+
+  const defaultLanding = getRoleDefaultLandingTab(role.id, role);
+  const permissions = role.permissions;
+
+  // 1. Primary priority: check if role can view its intended landing module
+  if (permissions && permissions[defaultLanding as keyof typeof permissions]?.canView) {
+    return defaultLanding;
+  }
+
+  // 2. Otherwise, check tabs in strict logical priority order
+  const tabsInOrder: TabType[] = [
+    'orders',
+    'inventory',
+    'finance',
+    'products',
+    'perangkat_kasir',
+    'dashboard',
+    'promotions',
+    'export_data',
+    'settings',
+  ];
+
+  for (const tab of tabsInOrder) {
+    if (permissions && permissions[tab as keyof typeof permissions]?.canView) {
+      return tab;
+    }
+  }
+
+  return 'orders';
+}
+
 

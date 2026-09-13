@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useSyncExternalStore } from 'react';
+import React, { useSyncExternalStore, useEffect, useRef } from 'react';
 import { AppProvider, useApp } from '@/context/AppContext';
+import { getFirstPermittedTab, getRoleDefaultLandingTab } from '@/lib/rbac';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { AuthView } from '@/components/AuthView';
-import { OnboardingView } from '@/components/OnboardingView';
 import { DashboardView } from '@/components/DashboardView';
 import { ProductsView } from '@/components/ProductsView';
 import { PromotionsView } from '@/components/PromotionsView';
@@ -36,25 +36,51 @@ function useIsClient() {
 function MainAppContent() {
   const {
     isAuthenticated,
-    hasCompletedOnboarding,
     activeTab,
+    setActiveTab,
+    currentUserRole,
+    hasPermission,
     isCreateOrderModalOpen,
     restockModalProductId,
     isShiftModalOpen,
     selectedShiftForZReport,
   } = useApp();
 
-  // 1. Auth Check (Login / Register view)
+  // Role-based landing & permission safeguard
+  const lastUserRoleRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated || !currentUserRole) return;
+
+    const userRoleKey = `${currentUserRole.id}`;
+    // When the active user's role initializes or switches, forcibly land on their designated module
+    if (lastUserRoleRef.current !== userRoleKey) {
+      lastUserRoleRef.current = userRoleKey;
+      const targetLanding = getRoleDefaultLandingTab(currentUserRole.id, currentUserRole);
+      if (hasPermission(targetLanding, 'view')) {
+        setActiveTab(targetLanding);
+        return;
+      }
+      const fallback = getFirstPermittedTab(currentUserRole);
+      setActiveTab(fallback);
+      return;
+    }
+
+    // Permission safeguard: if user attempts to view an unauthorized tab, bounce immediately
+    if (!hasPermission(activeTab, 'view')) {
+      const fallback = getFirstPermittedTab(currentUserRole);
+      if (fallback && fallback !== activeTab) {
+        setActiveTab(fallback);
+      }
+    }
+  }, [isAuthenticated, currentUserRole, activeTab, hasPermission, setActiveTab]);
+
+  // 1. Auth Check (Internal Login view)
   if (!isAuthenticated) {
     return <AuthView />;
   }
 
-  // 2. Onboarding Flow Check (3-step initial setup)
-  if (!hasCompletedOnboarding) {
-    return <OnboardingView />;
-  }
-
-  // 3. Authenticated App Layout (Left Sidebar + Main Content + Topbar)
+  // 2. Authenticated App Layout (Left Sidebar + Main Content + Topbar)
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex selection:bg-teal-500/20 selection:text-teal-900">
       {/* Persistent Left Sidebar for Desktop */}

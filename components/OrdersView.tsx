@@ -19,7 +19,9 @@ import {
   Globe,
   Plus,
   Building2,
+  ShoppingBag,
 } from 'lucide-react';
+import { CreateOrderModal } from '@/components/CreateOrderModal';
 
 interface OrdersViewProps {
   selectedOrderForModal?: Order | null;
@@ -46,6 +48,9 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
     endDate: new Date().toISOString().slice(0, 10),
   }));
 
+  const [activeSubTab, setActiveSubTab] = useState<'pos' | 'history'>(() => {
+    return selectedOrderForModal ? 'history' : 'pos';
+  });
   const [activeOrderDetail, setActiveOrderDetail] = useState<Order | null>(selectedOrderForModal || null);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
 
@@ -102,9 +107,57 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Filter & Search Bar */}
-      <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+    <div className="space-y-4 max-w-7xl mx-auto pb-12">
+      {/* Sub-Tabs: Terminal Kasir vs Riwayat Penjualan */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+          <button
+            type="button"
+            id="tab-btn-kasir-pos"
+            onClick={() => setActiveSubTab('pos')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              activeSubTab === 'pos'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <ShoppingBag className="w-4 h-4 text-teal-600" />
+            <span>Terminal Transaksi Kasir</span>
+          </button>
+          <button
+            type="button"
+            id="tab-btn-kasir-history"
+            onClick={() => setActiveSubTab('history')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              activeSubTab === 'history'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <Receipt className="w-4 h-4 text-slate-500" />
+            <span>Riwayat Penjualan ({filteredOrders.length})</span>
+          </button>
+        </div>
+
+        {activeSubTab === 'history' && (
+          <button
+            type="button"
+            id="btn-new-order-from-history"
+            onClick={() => setActiveSubTab('pos')}
+            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer self-start sm:self-auto"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Buat Transaksi Baru</span>
+          </button>
+        )}
+      </div>
+
+      {activeSubTab === 'pos' ? (
+        <CreateOrderModal isFullPage={true} onClose={() => setActiveSubTab('history')} />
+      ) : (
+        <>
+          {/* Filter & Search Bar */}
+          <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         {/* Search */}
         <div className="relative flex-1 max-w-sm">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -308,6 +361,8 @@ export function OrdersView({ selectedOrderForModal, onCloseDetailModal }: Orders
           itemName="transaksi pesanan"
         />
       </div>
+      </>
+      )}
 
       {/* ORDER DETAIL MODAL */}
       {activeOrderDetail && (

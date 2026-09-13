@@ -7,6 +7,12 @@ import { formatRupiah } from '@/lib/utils';
 import { getProductEffectivePromo } from '@/services/promotionService';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { TablePagination } from '@/components/TablePagination';
+import { MasterlistCatalogModal } from '@/components/MasterlistCatalogModal';
+import {
+  searchProductMasterlist,
+  findMasterProductByBarcode,
+  MasterProductItem,
+} from '@/lib/productMasterlist';
 import {
   Package,
   Plus,
@@ -85,6 +91,12 @@ export function ProductsView() {
   // Modals
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isMasterCatalogOpen, setIsMasterCatalogOpen] = useState(false);
+
+  const existingProductBarcodes = useMemo(
+    () => products.map((p) => p.barcode).filter(Boolean) as string[],
+    [products]
+  );
   
   // Category Modal
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -193,6 +205,15 @@ export function ProductsView() {
             >
               <Sparkles className="w-3.5 h-3.5 text-teal-600" />
               <span>{isSeeding ? 'Memuat...' : 'Seed Data Contoh'}</span>
+            </button>
+
+            <button
+              onClick={() => setIsMasterCatalogOpen(true)}
+              className="flex items-center space-x-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-xs"
+              title="Katalog 60+ masterlist ritel FMCG & Sembako siap pakai"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+              <span>Masterlist Retail</span>
             </button>
 
             <button
@@ -850,6 +871,42 @@ export function ProductsView() {
           type="primary"
         />
       )}
+
+      {/* MASTERLIST CATALOG MODAL */}
+      {isMasterCatalogOpen && (
+        <MasterlistCatalogModal
+          isOpen={true}
+          onClose={() => setIsMasterCatalogOpen(false)}
+          onSelectProduct={(item) => {
+            setIsMasterCatalogOpen(false);
+            setEditingProduct({
+              id: '',
+              name: item.name,
+              barcode: item.barcode,
+              category: item.category,
+              unit: item.unit,
+              cogs: item.suggestedCogs,
+              sellingPrice: item.suggestedSellingPrice,
+              stock: 10,
+              minStockThreshold: 5,
+            } as Product);
+            setIsProductModalOpen(true);
+          }}
+          onAddDirectToInventory={async (item, initialStock) => {
+            await createProduct({
+              name: item.name,
+              barcode: item.barcode,
+              category: item.category,
+              unit: item.unit,
+              cogs: item.suggestedCogs,
+              sellingPrice: item.suggestedSellingPrice,
+              stock: initialStock,
+              minStockThreshold: 5,
+            });
+          }}
+          existingProductBarcodes={existingProductBarcodes}
+        />
+      )}
     </div>
   );
 }
@@ -888,6 +945,40 @@ function ProductFormModal({
   const [image, setImage] = useState<string | undefined>(editingProduct?.image);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [showConfirmSave, setShowConfirmSave] = useState(false);
+
+  // Masterlist Autocomplete & Suggestion State
+  const [showMasterSuggestions, setShowMasterSuggestions] = useState(false);
+  const [isMasterCatalogOpen, setIsMasterCatalogOpen] = useState(false);
+
+  // Suggestions based on typed name
+  const masterSuggestions = useMemo(() => {
+    if (!name || name.trim().length < 2) return [];
+    return searchProductMasterlist(name.trim(), 6);
+  }, [name]);
+
+  // Detected product by barcode match
+  const detectedMasterProduct = useMemo(() => {
+    if (!barcode || barcode.trim().length < 4) return null;
+    return findMasterProductByBarcode(barcode.trim());
+  }, [barcode]);
+
+  const handleApplyMasterItem = (item: MasterProductItem) => {
+    setName(item.name);
+    setBarcode(item.barcode);
+    const matchedCategory = categories.find(
+      (c) => c.name.toLowerCase() === item.category.toLowerCase()
+    );
+    if (matchedCategory) {
+      setCategory(matchedCategory.name);
+    } else {
+      setCategory(item.category);
+    }
+    setUnit(item.unit);
+    setCogs(item.suggestedCogs);
+    setSellingPrice(item.suggestedSellingPrice);
+    setShowMasterSuggestions(false);
+    setIsMasterCatalogOpen(false);
+  };
 
   // Inline Add New Category State
   const [isAddingCategoryInline, setIsAddingCategoryInline] = useState(false);
@@ -969,20 +1060,118 @@ function ProductFormModal({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs">
-          {/* Product Name */}
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">
-              Nama Produk <span className="text-teal-600">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="Contoh: Indomie Goreng Spesial, Le Minerale 600ml"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-            />
+          {/* Product Name with Masterlist Autocomplete */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-semibold text-slate-700">
+                Nama Produk <span className="text-teal-600">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsMasterCatalogOpen(true)}
+                className="flex items-center space-x-1.5 text-teal-600 hover:text-teal-700 font-semibold px-2 py-0.5 rounded-lg hover:bg-teal-50 transition-colors cursor-pointer text-xs"
+                title="Buka saran katalog ritel masterlist"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                <span>Pilih dari Masterlist</span>
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Ketik nama produk (misal: Indomie, Aqua, Minyak Bimoli)..."
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setShowMasterSuggestions(true);
+                }}
+                onFocus={() => setShowMasterSuggestions(true)}
+                required
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+              />
+              {name && (
+                <button
+                  type="button"
+                  onClick={() => setName('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Suggestions dropdown popup */}
+            {showMasterSuggestions && masterSuggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden animate-in fade-in duration-100">
+                <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                  <span className="font-semibold text-teal-800 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                    Saran Produk Ritel FMCG
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowMasterSuggestions(false)}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer font-medium"
+                  >
+                    Tutup
+                  </button>
+                </div>
+                <div className="max-h-56 overflow-y-auto divide-y divide-slate-100">
+                  {masterSuggestions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleApplyMasterItem(item)}
+                      className="w-full px-3.5 py-2.5 text-left hover:bg-teal-50/70 transition-colors flex items-center justify-between group cursor-pointer"
+                    >
+                      <div className="min-w-0 pr-3">
+                        <div className="font-semibold text-slate-900 group-hover:text-teal-900 truncate">
+                          {item.name}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[10px] text-slate-500">
+                          <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono font-medium">{item.barcode}</span>
+                          <span>•</span>
+                          <span className="text-teal-700 font-medium">{item.category}</span>
+                          <span>•</span>
+                          <span>Satuan: {item.unit}</span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-bold text-teal-700 block">
+                          {formatRupiah(item.suggestedSellingPrice)}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          HPP: {formatRupiah(item.suggestedCogs)}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Masterlist Barcode Detected Notification */}
+          {detectedMasterProduct && name !== detectedMasterProduct.name && (
+            <div className="p-3 bg-teal-50/90 border border-teal-200 rounded-xl flex items-center justify-between gap-3 animate-in fade-in duration-100">
+              <div className="text-xs text-teal-900 min-w-0">
+                <span className="font-bold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                  Barcode terdaftar di Masterlist Ritel:
+                </span>
+                <div className="truncate font-medium text-slate-800 mt-0.5">
+                  {detectedMasterProduct.name} ({detectedMasterProduct.category})
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleApplyMasterItem(detectedMasterProduct)}
+                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-lg text-xs font-semibold shrink-0 transition-colors shadow-xs cursor-pointer"
+              >
+                Gunakan Data
+              </button>
+            </div>
+          )}
 
           {/* Barcode Field with Camera Scan Action */}
           <div>
@@ -1356,6 +1545,15 @@ function ProductFormModal({
           confirmText={editingProduct ? 'Ya, Perbarui' : 'Ya, Simpan'}
           cancelText="Batal"
           type="primary"
+        />
+      )}
+
+      {/* Masterlist Catalog Browser Modal inside Product Form */}
+      {isMasterCatalogOpen && (
+        <MasterlistCatalogModal
+          isOpen={true}
+          onClose={() => setIsMasterCatalogOpen(false)}
+          onSelectProduct={handleApplyMasterItem}
         />
       )}
     </div>

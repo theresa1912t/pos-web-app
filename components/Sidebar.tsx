@@ -78,7 +78,7 @@ export function Sidebar({ isMobileDrawer = false }: SidebarProps) {
     },
     {
       id: 'orders' as const,
-      label: 'Pesanan',
+      label: 'Kasir',
       icon: ShoppingCart,
       visible: hasPermission('orders', 'view'),
     },
@@ -344,32 +344,27 @@ export function Sidebar({ isMobileDrawer = false }: SidebarProps) {
               </div>
             </div>
 
-            <button
-              id="sidebar-profile-settings-btn"
-              onClick={handleProfileSettingsClick}
-              className={`w-full flex items-center space-x-2.5 px-3.5 py-2 text-xs font-medium transition-colors cursor-pointer ${
-                activeTab === 'settings'
-                  ? 'bg-teal-50 text-teal-700 font-semibold'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <Settings className="w-4 h-4 text-slate-400" />
-              <span>Pengaturan Akun</span>
-            </button>
+            {hasPermission('settings', 'view') && (
+              <button
+                id="sidebar-profile-settings-btn"
+                onClick={handleProfileSettingsClick}
+                className={`w-full flex items-center space-x-2.5 px-3.5 py-2 text-xs font-medium transition-colors cursor-pointer ${
+                  activeTab === 'settings'
+                    ? 'bg-teal-50 text-teal-700 font-semibold'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <Settings className="w-4 h-4 text-slate-400" />
+                <span>Pengaturan & Lisensi</span>
+              </button>
+            )}
 
-            <button
-              id="sidebar-profile-subscription-btn"
-              onClick={handleProfileSettingsClick}
-              className="w-full flex items-center justify-between px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center space-x-2.5">
-                <Zap className="w-4 h-4 text-teal-600" />
-                <span>Langganan</span>
-              </div>
-              <span className="text-[10px] px-1.5 py-0.2 rounded bg-teal-50 text-teal-700 font-bold uppercase tracking-wider border border-teal-200">
-                {settings.subscription?.tier || 'Trial'}
+            <div className="px-3.5 py-2 flex items-center justify-between text-xs text-slate-600 bg-slate-50/70 rounded-lg mx-2 my-1 border border-slate-100">
+              <span className="text-[11px] text-slate-500 font-medium">Sistem:</span>
+              <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                Dedicated Enterprise
               </span>
-            </button>
+            </div>
 
             <div className="border-t border-slate-100 my-1"></div>
 

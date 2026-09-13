@@ -34,6 +34,10 @@ import {
   CashierShift,
   CashMovement,
   ShiftStatus,
+  CustomerReceivable,
+  SupplierPayable,
+  ReceivablePayment,
+  PayablePayment,
 } from '@/types';
 import {
   getSupabase,
@@ -61,6 +65,8 @@ import {
   INITIAL_PRODUCT_INVENTORIES,
   INITIAL_PROMOTIONS,
   INITIAL_CASHIER_SHIFTS,
+  INITIAL_CUSTOMER_RECEIVABLES,
+  INITIAL_SUPPLIER_PAYABLES,
   storage,
   generateProductInventories,
 } from '@/lib/storage';
@@ -73,6 +79,8 @@ import {
   credentialsStore,
   canAccessAllBranches,
   hasBranchAccess,
+  getRoleDefaultLandingTab,
+  getFirstPermittedTab,
 } from '@/lib/rbac';
 
 interface AppContextType {
@@ -244,6 +252,18 @@ interface AppContextType {
   updateSettings: (newSettings: Partial<BusinessSettings>) => Promise<void>;
   resetToDemoData: () => void;
 
+  // Customer Receivables (Piutang / Kasbon Pelanggan)
+  customerReceivables: CustomerReceivable[];
+  addCustomerReceivable: (data: Omit<CustomerReceivable, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'payments'>) => Promise<CustomerReceivable>;
+  recordReceivablePayment: (receivableId: string, amount: number, paymentMethod: 'Cash' | 'Transfer' | 'QRIS', notes?: string) => Promise<void>;
+  deleteCustomerReceivable: (id: string) => Promise<void>;
+
+  // Supplier Payables (Hutang Kulakan / Restock Supplier)
+  supplierPayables: SupplierPayable[];
+  addSupplierPayable: (data: Omit<SupplierPayable, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'payments'>) => Promise<SupplierPayable>;
+  recordPayablePayment: (payableId: string, amount: number, paymentMethod: 'Cash' | 'Transfer', notes?: string) => Promise<void>;
+  deleteSupplierPayable: (id: string) => Promise<void>;
+
   // Cashier Shifts & Cash Drawer Settlement (Closing Kasir)
   cashierShifts: CashierShift[];
   activeShift: CashierShift | null;
@@ -283,16 +303,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') return true;
     try {
       const saved = localStorage.getItem(CURRENT_USER_SESSION_KEY);
       if (saved) {
         const u = JSON.parse(saved);
-        return Boolean(u.onboardingCompleted);
+        if (u.onboardingCompleted !== undefined) return Boolean(u.onboardingCompleted);
       }
-      return false;
+      return true; // Default true for dedicated custom client app
     } catch {
-      return false;
+      return true;
     }
   });
 
@@ -309,7 +329,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [racks, setRacks] = useState<Rack[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [productInventories, setProductInventories] = useState<ProductInventory[]>([]);
-  const [activeBranchId, setActiveBranchIdState] = useState<string>(() => {
+  const [activeBranchIdRaw, setActiveBranchIdState] = useState<string>(() => {
     if (typeof window === 'undefined') return 'all';
     try {
       return sessionStorage.getItem('warung_active_branch_v1') || 'all';
@@ -336,6 +356,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [costs, setCosts] = useState<Cost[]>([]);
   const [settings, setSettings] = useState<BusinessSettings>(INITIAL_SETTINGS);
+
+  // Customer Receivables (Piutang) & Supplier Payables (Hutang)
+  const [customerReceivables, setCustomerReceivables] = useState<CustomerReceivable[]>(() => {
+    return storage.getCustomerReceivables();
+  });
+  const [supplierPayables, setSupplierPayables] = useState<SupplierPayable[]>(() => {
+    return storage.getSupplierPayables();
+  });
 
   // Omnichannel Integration States
   const [channelIntegrations, setChannelIntegrations] = useState<ChannelIntegration[]>(INITIAL_CHANNEL_INTEGRATIONS);
@@ -386,21 +414,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const baseBranches = branches.length > 0 ? branches : INITIAL_BRANCHES;
     if (!user || canSwitchToAllBranches) return baseBranches;
     const access = user.branchAccess || [];
-    if (access.length === 0) return baseBranches;
+    if (access.length === 0) return [baseBranches[0]];
     const filtered = baseBranches.filter((b) => access.includes(b.id));
-    return filtered.length > 0 ? filtered : baseBranches;
+    return filtered.length > 0 ? filtered : [baseBranches[0]];
   }, [branches, user, canSwitchToAllBranches]);
 
-  useEffect(() => {
-    if (!canSwitchToAllBranches && accessibleBranches.length > 0) {
-      if (activeBranchId === 'all' || !accessibleBranches.some((b) => b.id === activeBranchId)) {
-        const fallbackId = accessibleBranches[0].id;
-        queueMicrotask(() => {
-          setActiveBranchId(fallbackId);
-        });
+  const activeBranchId = useMemo(() => {
+    if (canSwitchToAllBranches) return activeBranchIdRaw;
+    if (accessibleBranches.length > 0) {
+      if (activeBranchIdRaw === 'all' || !accessibleBranches.some((b) => b.id === activeBranchIdRaw)) {
+        return accessibleBranches[0].id;
       }
     }
-  }, [canSwitchToAllBranches, accessibleBranches, activeBranchId, setActiveBranchId]);
+    return activeBranchIdRaw;
+  }, [canSwitchToAllBranches, accessibleBranches, activeBranchIdRaw]);
 
   const activeBranch = useMemo(() => {
     if (activeBranchId === 'all') return null;
@@ -432,8 +459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           .eq('id', activeUser.id)
           .single();
 
-        const isOnboardingDone = profileData?.onboarding_completed ?? (activeUser.email === 'staging@example.com');
-        setHasCompletedOnboarding(isOnboardingDone);
+        setHasCompletedOnboarding(true);
 
         // Update active user status and role if stored in Supabase
         if (profileData) {
@@ -730,6 +756,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setProductInventories(generateProductInventories(prodData || INITIAL_SEED_PRODUCTS, loadedBranches));
         }
 
+        const matchedRole = (rolesData || DEFAULT_ROLES).find((r: any) => r.id === activeUser.roleId) || null;
+        const landingTab = getRoleDefaultLandingTab(activeUser.roleId, matchedRole);
+        setActiveTab(landingTab);
+
         setIsLoaded(true);
         return;
       } catch (err) {
@@ -752,10 +782,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRestocks(stored.restocks);
     setRevenues(stored.revenues);
     setCosts(stored.costs);
+    setCustomerReceivables(stored.customerReceivables || JSON.parse(JSON.stringify(INITIAL_CUSTOMER_RECEIVABLES)));
+    setSupplierPayables(stored.supplierPayables || JSON.parse(JSON.stringify(INITIAL_SUPPLIER_PAYABLES)));
     setSettings(stored.settings);
-    setRoles(stored.roles || JSON.parse(JSON.stringify(DEFAULT_ROLES)));
-    setUsers(stored.users || (activeUser.email === 'staging@example.com' ? JSON.parse(JSON.stringify(STAGING_INITIAL_USERS)) : []));
-    setHasCompletedOnboarding(stored.onboardingCompleted);
+    // Always synchronize system roles to guarantee strict RBAC enforcement
+    const storedRolesList = stored.roles || [];
+    const refreshedRoles = storedRolesList.map((exRole: AppRole) => {
+      const matchDefault = DEFAULT_ROLES.find((dr) => dr.id === exRole.id);
+      if (matchDefault) {
+        return {
+          ...exRole,
+          permissions: JSON.parse(JSON.stringify(matchDefault.permissions)),
+        };
+      }
+      return exRole;
+    });
+    for (const defRole of DEFAULT_ROLES) {
+      if (!refreshedRoles.some((r: AppRole) => r.id === defRole.id)) {
+        refreshedRoles.push(JSON.parse(JSON.stringify(defRole)));
+      }
+    }
+    setRoles(refreshedRoles);
+    setUsers(stored.users || JSON.parse(JSON.stringify(STAGING_INITIAL_USERS)));
+    setHasCompletedOnboarding(true);
     setChannelIntegrations(stored.channelIntegrations || JSON.parse(JSON.stringify(INITIAL_CHANNEL_INTEGRATIONS)));
     setProductMappings(stored.productMappings || JSON.parse(JSON.stringify(INITIAL_PRODUCT_MAPPINGS)));
     setChannelSyncErrors(stored.channelSyncErrors || JSON.parse(JSON.stringify(INITIAL_CHANNEL_SYNC_ERRORS)));
@@ -765,9 +814,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProductInventories(stored.productInventories || generateProductInventories(stored.products, loadedBranches));
 
     // Sync active user role & status if in user list
-    const foundUser = (stored.users || []).find((u) => u.id === activeUser.id || u.email === activeUser.email);
+    let effectiveRoleId = activeUser.roleId;
+    const foundUser = (stored.users || []).find((u) => u.id === activeUser.id || u.email === activeUser.email || (u.username && activeUser.username && u.username.toLowerCase() === activeUser.username.toLowerCase()));
     if (foundUser) {
       activeUser.roleId = foundUser.roleId;
+      effectiveRoleId = foundUser.roleId;
       activeUser.username = foundUser.username;
       activeUser.status = foundUser.status;
       if (foundUser.branchAccess) {
@@ -775,6 +826,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setUser({ ...activeUser });
     }
+
+    const matchedRole = refreshedRoles.find((r) => r.id === effectiveRoleId) || null;
+    const landingTab = getRoleDefaultLandingTab(effectiveRoleId, matchedRole);
+    setActiveTab(landingTab);
 
     setIsLoaded(true);
   }, []);
@@ -798,7 +853,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     newProductMappings = productMappings,
     newChannelSyncErrors = channelSyncErrors,
     newBranches = branches,
-    newProductInventories = productInventories
+    newProductInventories = productInventories,
+    newCustomerReceivables = customerReceivables,
+    newSupplierPayables = supplierPayables
   ) => {
     if (!user) return;
     localUserDataStore.saveUserData(user.id, {
@@ -820,8 +877,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       channelSyncErrors: newChannelSyncErrors,
       branches: newBranches,
       productInventories: newProductInventories,
+      customerReceivables: newCustomerReceivables,
+      supplierPayables: newSupplierPayables,
     });
-  }, [user, products, categories, orders, restocks, revenues, costs, settings, roles, users, hasCompletedOnboarding, racks, stockOpnames, stockOpnameSchedules, channelIntegrations, productMappings, channelSyncErrors, branches, productInventories]);
+  }, [user, products, categories, orders, restocks, revenues, costs, settings, roles, users, hasCompletedOnboarding, racks, stockOpnames, stockOpnameSchedules, channelIntegrations, productMappings, channelSyncErrors, branches, productInventories, customerReceivables, supplierPayables]);
 
   // Handle Supabase Auth State synchronization on mount
   useEffect(() => {
@@ -916,6 +975,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         phone: localUserMatch.phone || '',
         username: localUserMatch.username,
         roleId: localUserMatch.roleId,
+        branchAccess: localUserMatch.branchAccess || (localUserMatch.roleId === 'role-owner-admin' ? ['*'] : ['branch-1']),
         status: localUserMatch.status,
         onboardingCompleted: true,
       };
@@ -1017,6 +1077,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // 3. Isolated fallback authentication (for preview and staging without live keys)
     const isStaging = input === 'staging' || input === 'staging@example.com' || input === 'admin' || input === 'owner';
+    const isKasir = input.includes('kasir');
+    const isSpv = input.includes('spv') || input.includes('supervisor');
+    const isFinance = input.includes('finance') || input.includes('akuntan');
+    const isGudang = input.includes('gudang');
+    const assignedRoleId = isKasir
+      ? 'role-kasir'
+      : isSpv
+      ? 'role-supervisor'
+      : isFinance
+      ? 'role-finance'
+      : isGudang
+      ? 'role-gudang'
+      : 'role-owner-admin';
+
     const cleanUsername = input.includes('@') ? input.split('@')[0] : input;
     const userId = isStaging ? 'usr-staging-0000-0000-000000000000' : `usr-${btoa(cleanUsername).slice(0, 16)}`;
     const userName = isStaging
@@ -1028,9 +1102,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       email: input.includes('@') ? input : `${cleanUsername}@warung.internal`,
       name: userName.charAt(0).toUpperCase() + userName.slice(1),
       username: cleanUsername,
-      roleId: 'role-owner-admin',
+      roleId: assignedRoleId,
       status: 'active',
-      onboardingCompleted: isStaging,
+      onboardingCompleted: isStaging || isKasir || isSpv || isFinance || isGudang,
     };
 
     setUser(u);
@@ -3544,6 +3618,339 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return movement;
   };
 
+  // CUSTOMER RECEIVABLES (PIUTANG / KASBON PELANGGAN)
+  const addCustomerReceivable = async (
+    data: Omit<CustomerReceivable, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'payments'>
+  ): Promise<CustomerReceivable> => {
+    const targetBranchId = data.branchId || (activeBranchId !== 'all' ? activeBranchId : (branches[0]?.id || 'branch-1'));
+    const targetBranch = branches.find(b => b.id === targetBranchId);
+    const newRec: CustomerReceivable = {
+      id: `rcv-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      branchId: targetBranchId,
+      branchName: targetBranch?.name || 'Cabang Utama',
+      customerName: data.customerName,
+      customerPhone: data.customerPhone,
+      notes: data.notes,
+      totalAmount: data.totalAmount,
+      paidAmount: 0,
+      remainingAmount: data.totalAmount,
+      status: 'Unpaid',
+      dueDate: data.dueDate,
+      createdAt: new Date().toISOString(),
+      orderId: data.orderId,
+      payments: [],
+    };
+    const next = [newRec, ...customerReceivables];
+    setCustomerReceivables(next);
+    storage.saveCustomerReceivables(next);
+    persistUserLocalState(
+      products,
+      categories,
+      orders,
+      restocks,
+      revenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      productInventories,
+      next,
+      supplierPayables
+    );
+    return newRec;
+  };
+
+  const recordReceivablePayment = async (
+    receivableId: string,
+    amount: number,
+    paymentMethod: 'Cash' | 'Transfer' | 'QRIS',
+    notes?: string
+  ): Promise<void> => {
+    const target = customerReceivables.find(r => r.id === receivableId);
+    if (!target) return;
+    const newPayment: ReceivablePayment = {
+      id: `rcv-pay-${Date.now()}`,
+      amount,
+      paymentMethod,
+      paymentDate: new Date().toISOString(),
+      receivedBy: user?.name || 'Kasir',
+      notes,
+    };
+    const updatedPaid = target.paidAmount + amount;
+    const updatedRemaining = Math.max(0, target.totalAmount - updatedPaid);
+    const updatedStatus = updatedRemaining <= 0 ? 'Paid' : 'Partial';
+
+    const updatedRec: CustomerReceivable = {
+      ...target,
+      paidAmount: updatedPaid,
+      remainingAmount: updatedRemaining,
+      status: updatedStatus,
+      payments: [newPayment, ...target.payments],
+    };
+
+    const next = customerReceivables.map(r => r.id === receivableId ? updatedRec : r);
+    setCustomerReceivables(next);
+    storage.saveCustomerReceivables(next);
+
+    // Otomatis catat ke Revenue / Pemasukan kas
+    await addRevenue(
+      amount,
+      `Pelunasan Bon: ${target.customerName} (${paymentMethod})`,
+      new Date().toISOString(),
+      `Pelunasan kasbon pelanggan. Metode bayar: ${paymentMethod}. ${notes || ''}`,
+      target.branchId
+    );
+
+    // Jika dibayar tunai (Cash) dan ada shift kasir terbuka di cabang tersebut, tambahkan ke kas masuk kasir
+    if (paymentMethod === 'Cash' && target.branchId) {
+      setCashierShifts(prevShifts => {
+        const openIndex = prevShifts.findIndex(s => s.status === 'Open' && s.branchId === target.branchId);
+        if (openIndex === -1) return prevShifts;
+        const cur = prevShifts[openIndex];
+        const next = [...prevShifts];
+        next[openIndex] = {
+          ...cur,
+          cashSalesTotal: cur.cashSalesTotal + amount,
+          expectedEndingCash: cur.expectedEndingCash + amount,
+        };
+        storage.saveCashierShifts(next);
+        return next;
+      });
+    }
+
+    persistUserLocalState(
+      products,
+      categories,
+      orders,
+      restocks,
+      revenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      productInventories,
+      next,
+      supplierPayables
+    );
+  };
+
+  const deleteCustomerReceivable = async (id: string): Promise<void> => {
+    const next = customerReceivables.filter(r => r.id !== id);
+    setCustomerReceivables(next);
+    storage.saveCustomerReceivables(next);
+    persistUserLocalState(
+      products,
+      categories,
+      orders,
+      restocks,
+      revenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      productInventories,
+      next,
+      supplierPayables
+    );
+  };
+
+  // SUPPLIER PAYABLES (HUTANG KULAKAN / RESTOCK SUPPLIER)
+  const addSupplierPayable = async (
+    data: Omit<SupplierPayable, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'payments'>
+  ): Promise<SupplierPayable> => {
+    const targetBranchId = data.branchId || (activeBranchId !== 'all' ? activeBranchId : (branches[0]?.id || 'branch-1'));
+    const targetBranch = branches.find(b => b.id === targetBranchId);
+    const newPay: SupplierPayable = {
+      id: `pay-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      branchId: targetBranchId,
+      branchName: targetBranch?.name || 'Cabang Utama',
+      supplierName: data.supplierName,
+      invoiceNumber: data.invoiceNumber,
+      supplierPhone: data.supplierPhone,
+      notes: data.notes,
+      totalAmount: data.totalAmount,
+      paidAmount: 0,
+      remainingAmount: data.totalAmount,
+      status: 'Unpaid',
+      dueDate: data.dueDate,
+      createdAt: new Date().toISOString(),
+      restockId: data.restockId,
+      payments: [],
+    };
+    const next = [newPay, ...supplierPayables];
+    setSupplierPayables(next);
+    storage.saveSupplierPayables(next);
+    persistUserLocalState(
+      products,
+      categories,
+      orders,
+      restocks,
+      revenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      productInventories,
+      customerReceivables,
+      next
+    );
+    return newPay;
+  };
+
+  const recordPayablePayment = async (
+    payableId: string,
+    amount: number,
+    paymentMethod: 'Cash' | 'Transfer',
+    notes?: string
+  ): Promise<void> => {
+    const target = supplierPayables.find(p => p.id === payableId);
+    if (!target) return;
+    const newPayment: PayablePayment = {
+      id: `spl-pay-${Date.now()}`,
+      amount,
+      paymentMethod,
+      paymentDate: new Date().toISOString(),
+      paidBy: user?.name || 'Pemilik Toko',
+      notes,
+    };
+    const updatedPaid = target.paidAmount + amount;
+    const updatedRemaining = Math.max(0, target.totalAmount - updatedPaid);
+    const updatedStatus = updatedRemaining <= 0 ? 'Paid' : 'Partial';
+
+    const updatedPay: SupplierPayable = {
+      ...target,
+      paidAmount: updatedPaid,
+      remainingAmount: updatedRemaining,
+      status: updatedStatus,
+      payments: [newPayment, ...target.payments],
+    };
+
+    const next = supplierPayables.map(p => p.id === payableId ? updatedPay : p);
+    setSupplierPayables(next);
+    storage.saveSupplierPayables(next);
+
+    // Catat ke biaya pengeluaran (Cost)
+    await addCost(
+      amount,
+      'Restock',
+      `Bayar Hutang Supplier: ${target.supplierName} (${target.invoiceNumber || 'Tempo'})`,
+      new Date().toISOString(),
+      `Metode pembayaran: ${paymentMethod}. ${notes || ''}`,
+      target.branchId
+    );
+
+    // Jika dibayar tunai dari kasir cabang, catat CashOut pada shift aktif
+    if (paymentMethod === 'Cash' && target.branchId) {
+      setCashierShifts(prevShifts => {
+        const openIndex = prevShifts.findIndex(s => s.status === 'Open' && s.branchId === target.branchId);
+        if (openIndex === -1) return prevShifts;
+        const cur = prevShifts[openIndex];
+        const next = [...prevShifts];
+        next[openIndex] = {
+          ...cur,
+          cashOutTotal: cur.cashOutTotal + amount,
+          expectedEndingCash: Math.max(0, cur.expectedEndingCash - amount),
+          cashMovements: [
+            {
+              id: `cm-spl-${Date.now()}`,
+              type: 'CashOut',
+              amount,
+              reason: `Bayar Hutang Supplier: ${target.supplierName}`,
+              createdAt: new Date().toISOString(),
+              cashierName: user?.name || 'Kasir',
+            },
+            ...cur.cashMovements,
+          ],
+        };
+        storage.saveCashierShifts(next);
+        return next;
+      });
+    }
+
+    persistUserLocalState(
+      products,
+      categories,
+      orders,
+      restocks,
+      revenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      productInventories,
+      customerReceivables,
+      next
+    );
+  };
+
+  const deleteSupplierPayable = async (id: string): Promise<void> => {
+    const next = supplierPayables.filter(p => p.id !== id);
+    setSupplierPayables(next);
+    storage.saveSupplierPayables(next);
+    persistUserLocalState(
+      products,
+      categories,
+      orders,
+      restocks,
+      revenues,
+      costs,
+      settings,
+      roles,
+      users,
+      hasCompletedOnboarding,
+      racks,
+      stockOpnames,
+      stockOpnameSchedules,
+      channelIntegrations,
+      productMappings,
+      channelSyncErrors,
+      branches,
+      productInventories,
+      customerReceivables,
+      next
+    );
+  };
+
   // RESET TO DEMO (STAGING ONLY)
   const resetToDemoData = () => {
     const initial = getStagingInitialData();
@@ -3556,6 +3963,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRestocks(initial.restocks);
     setRevenues(initial.revenues);
     setCosts(initial.costs);
+    setCustomerReceivables(INITIAL_CUSTOMER_RECEIVABLES);
+    storage.saveCustomerReceivables(INITIAL_CUSTOMER_RECEIVABLES);
+    setSupplierPayables(INITIAL_SUPPLIER_PAYABLES);
+    storage.saveSupplierPayables(INITIAL_SUPPLIER_PAYABLES);
     setSettings(initial.settings);
     setRoles(initial.roles || JSON.parse(JSON.stringify(DEFAULT_ROLES)));
     if (initial.users && initial.users.length > 0) {
@@ -3685,6 +4096,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addCost,
         updateSettings,
         resetToDemoData,
+
+        // Customer Receivables (Piutang)
+        customerReceivables,
+        addCustomerReceivable,
+        recordReceivablePayment,
+        deleteCustomerReceivable,
+
+        // Supplier Payables (Hutang)
+        supplierPayables,
+        addSupplierPayable,
+        recordPayablePayment,
+        deleteSupplierPayable,
 
         // Cashier Shifts & Cash Drawer Settlement
         cashierShifts,

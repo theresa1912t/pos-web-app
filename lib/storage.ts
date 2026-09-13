@@ -19,6 +19,8 @@ import {
   ProductInventory,
   CashierShift,
   CashMovement,
+  CustomerReceivable,
+  SupplierPayable,
 } from '@/types';
 
 const STORAGE_KEYS = {
@@ -31,6 +33,8 @@ const STORAGE_KEYS = {
   STOCK_OPNAMES: 'warung_stock_opnames_v1',
   STOCK_OPNAME_SCHEDULES: 'warung_stock_opname_schedules_v1',
   CASHIER_SHIFTS: 'warung_cashier_shifts_v1',
+  CUSTOMER_RECEIVABLES: 'warung_customer_receivables_v1',
+  SUPPLIER_PAYABLES: 'warung_supplier_payables_v1',
   RESTOCKS: 'warung_restocks_v1',
   ORDERS: 'warung_orders_v1',
   REVENUES: 'warung_revenues_v1',
@@ -42,6 +46,141 @@ const STORAGE_KEYS = {
   PRODUCT_MAPPINGS: 'warung_product_mappings_v1',
   CHANNEL_SYNC_ERRORS: 'warung_channel_sync_errors_v1',
 };
+
+export const INITIAL_CUSTOMER_RECEIVABLES: CustomerReceivable[] = [
+  {
+    id: 'rcv-1',
+    branchId: 'branch-1',
+    branchName: 'Cabang Utama - Tebet',
+    customerName: 'Ibu Nurul (Komplek A3)',
+    customerPhone: '0812-8899-1122',
+    notes: 'Bon belanja mingguan minyak, beras, dan telur',
+    totalAmount: 350000,
+    paidAmount: 150000,
+    remainingAmount: 200000,
+    status: 'Partial',
+    dueDate: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
+    createdAt: new Date(Date.now() - 4 * 86400000).toISOString(),
+    payments: [
+      {
+        id: 'rcv-pay-1',
+        amount: 150000,
+        paymentMethod: 'Transfer',
+        paymentDate: new Date(Date.now() - 1 * 86400000).toISOString(),
+        receivedBy: 'Kasir Utama',
+        notes: 'Transfer via BCA',
+      },
+    ],
+  },
+  {
+    id: 'rcv-2',
+    branchId: 'branch-1',
+    branchName: 'Cabang Utama - Tebet',
+    customerName: 'Pak RT Budi (Konsumsi Rapat)',
+    customerPhone: '0813-7766-5544',
+    notes: 'Snack rapat warga & galon air mineral',
+    totalAmount: 245000,
+    paidAmount: 0,
+    remainingAmount: 245000,
+    status: 'Unpaid',
+    dueDate: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10),
+    createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+    payments: [],
+  },
+  {
+    id: 'rcv-3',
+    branchId: 'branch-1',
+    branchName: 'Cabang Utama - Tebet',
+    customerName: 'Warung Kopi Mas Joko',
+    customerPhone: '0857-3322-1100',
+    notes: 'Titip rokok & kopi rentengan tempo 3 hari',
+    totalAmount: 520000,
+    paidAmount: 520000,
+    remainingAmount: 0,
+    status: 'Paid',
+    dueDate: new Date(Date.now() - 1 * 86400000).toISOString().slice(0, 10),
+    createdAt: new Date(Date.now() - 6 * 86400000).toISOString(),
+    payments: [
+      {
+        id: 'rcv-pay-2',
+        amount: 520000,
+        paymentMethod: 'Cash',
+        paymentDate: new Date(Date.now() - 1 * 86400000).toISOString(),
+        receivedBy: 'Kasir Utama',
+        notes: 'Lunas tunai di toko',
+      },
+    ],
+  },
+];
+
+export const INITIAL_SUPPLIER_PAYABLES: SupplierPayable[] = [
+  {
+    id: 'pay-1',
+    branchId: 'branch-1',
+    branchName: 'Cabang Utama - Tebet',
+    supplierName: 'PT Indofood Sukses Makmur',
+    invoiceNumber: 'INV-IND-2026/092',
+    supplierPhone: '021-57958822',
+    notes: 'Restock mie instan 20 karton & bumbu dapur',
+    totalAmount: 1850000,
+    paidAmount: 0,
+    remainingAmount: 1850000,
+    status: 'Unpaid',
+    dueDate: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+    payments: [],
+  },
+  {
+    id: 'pay-2',
+    branchId: 'branch-1',
+    branchName: 'Cabang Utama - Tebet',
+    supplierName: 'Distributor Sembako Jaya',
+    invoiceNumber: 'INV-DSJ-8821',
+    supplierPhone: '0811-9988-7711',
+    notes: 'Restock beras premium 10 karung & minyak goreng',
+    totalAmount: 3200000,
+    paidAmount: 1500000,
+    remainingAmount: 1700000,
+    status: 'Partial',
+    dueDate: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10),
+    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+    payments: [
+      {
+        id: 'spl-pay-1',
+        amount: 1500000,
+        paymentMethod: 'Transfer',
+        paymentDate: new Date(Date.now() - 2 * 86400000).toISOString(),
+        paidBy: 'Pemilik Toko',
+        notes: 'DP 50% via transfer Mandiri',
+      },
+    ],
+  },
+  {
+    id: 'pay-3',
+    branchId: 'branch-1',
+    branchName: 'Cabang Utama - Tebet',
+    supplierName: 'Agen Aneka Minuman Kemasan',
+    invoiceNumber: 'INV-AAM-0441',
+    supplierPhone: '0818-4455-6677',
+    notes: 'Restock Teh Botol, Le Minerale, Floridina 15 dus',
+    totalAmount: 950000,
+    paidAmount: 950000,
+    remainingAmount: 0,
+    status: 'Paid',
+    dueDate: new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10),
+    createdAt: new Date(Date.now() - 9 * 86400000).toISOString(),
+    payments: [
+      {
+        id: 'spl-pay-2',
+        amount: 950000,
+        paymentMethod: 'Cash',
+        paymentDate: new Date(Date.now() - 2 * 86400000).toISOString(),
+        paidBy: 'Kasir Utama',
+        notes: 'Pelunasan tunai saat barang datang',
+      },
+    ],
+  },
+];
 
 export const INITIAL_BRANCHES: Branch[] = [
   {
@@ -1049,12 +1188,12 @@ export const INITIAL_SETTINGS: BusinessSettings = {
   ownerEmail: 'warungjuara@gmail.com',
   ownerPhone: '0812-9876-5432',
   subscription: {
-    tier: 'trial',
+    tier: 'enterprise',
     status: 'active',
-    expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-    activeBranchesLimit: 1,
-    maxUsersLimit: 3,
-    billingCycle: 'monthly',
+    expiresAt: '2099-12-31T23:59:59.000Z',
+    activeBranchesLimit: 999,
+    maxUsersLimit: 999,
+    billingCycle: 'yearly',
   },
   printerName: 'POS Thermal Printer 58mm (USB/Bluetooth)',
   printerConnected: true,
@@ -2662,6 +2801,44 @@ export const storageService = {
   saveCashierShifts(shifts: CashierShift[]): void {
     if (typeof window === 'undefined') return;
     localStorage.setItem(STORAGE_KEYS.CASHIER_SHIFTS, JSON.stringify(shifts));
+  },
+
+  getCustomerReceivables(): CustomerReceivable[] {
+    if (typeof window === 'undefined') return INITIAL_CUSTOMER_RECEIVABLES;
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.CUSTOMER_RECEIVABLES);
+      if (!data) {
+        localStorage.setItem(STORAGE_KEYS.CUSTOMER_RECEIVABLES, JSON.stringify(INITIAL_CUSTOMER_RECEIVABLES));
+        return INITIAL_CUSTOMER_RECEIVABLES;
+      }
+      return JSON.parse(data);
+    } catch {
+      return INITIAL_CUSTOMER_RECEIVABLES;
+    }
+  },
+
+  saveCustomerReceivables(receivables: CustomerReceivable[]): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(STORAGE_KEYS.CUSTOMER_RECEIVABLES, JSON.stringify(receivables));
+  },
+
+  getSupplierPayables(): SupplierPayable[] {
+    if (typeof window === 'undefined') return INITIAL_SUPPLIER_PAYABLES;
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.SUPPLIER_PAYABLES);
+      if (!data) {
+        localStorage.setItem(STORAGE_KEYS.SUPPLIER_PAYABLES, JSON.stringify(INITIAL_SUPPLIER_PAYABLES));
+        return INITIAL_SUPPLIER_PAYABLES;
+      }
+      return JSON.parse(data);
+    } catch {
+      return INITIAL_SUPPLIER_PAYABLES;
+    }
+  },
+
+  saveSupplierPayables(payables: SupplierPayable[]): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(STORAGE_KEYS.SUPPLIER_PAYABLES, JSON.stringify(payables));
   },
 
   getAuthUser(): User | null {

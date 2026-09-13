@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import {
   Store,
-  Mail,
   Lock,
   User,
   ArrowRight,
@@ -17,18 +16,11 @@ import {
 } from 'lucide-react';
 
 export function AuthView() {
-  const { authScreen, setAuthScreen, login, register, hasCompletedOnboarding, setActiveTab } = useApp();
+  const { login } = useApp();
 
   // Login form state
   const [loginIdentifier, setLoginIdentifier] = useState('staging');
   const [loginPassword, setLoginPassword] = useState('StagingDemo2026!');
-
-  // Register form state
-  const [regName, setRegName] = useState('');
-  const [regUsername, setRegUsername] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regConfirmPassword, setRegConfirmPassword] = useState('');
 
   // UI state
   const [showPassword, setShowPassword] = useState(false);
@@ -45,41 +37,10 @@ export function AuthView() {
       setIsLoading(false);
       if (!res.success) {
         setErrorMessage(res.error || 'Login gagal. Periksa username dan kata sandi Anda.');
-      } else {
-        if (hasCompletedOnboarding) {
-          setActiveTab('dashboard');
-        }
       }
     } catch (err: any) {
       setIsLoading(false);
       setErrorMessage(err?.message || 'Terjadi gangguan koneksi autentikasi.');
-    }
-  };
-
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (regPassword !== regConfirmPassword) {
-      setErrorMessage('Konfirmasi kata sandi tidak cocok.');
-      return;
-    }
-
-    if (regPassword.length < 6) {
-      setErrorMessage('Kata sandi minimal 6 karakter.');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const res = await register(regName, regEmail, regPassword, regUsername);
-      setIsLoading(false);
-      if (!res.success) {
-        setErrorMessage(res.error || 'Pendaftaran akun gagal.');
-      }
-    } catch (err: any) {
-      setIsLoading(false);
-      setErrorMessage(err?.message || 'Terjadi gangguan saat mendaftar.');
     }
   };
 
@@ -102,48 +63,12 @@ export function AuthView() {
           Warung POS Pro
         </h2>
         <p className="mt-1 text-center text-xs sm:text-sm text-slate-500 max-w-xs mx-auto">
-          {authScreen === 'login'
-            ? 'Masuk ke sistem kasir, stok & pembukuan warung'
-            : 'Daftar akun pemilik baru dan mulai kelola usaha Anda'}
+          Portal Masuk Internal Karyawan &amp; Manajemen
         </p>
       </div>
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-sm border border-slate-200 rounded-2xl sm:px-10">
-          {/* Tabs for switching between Login & Register */}
-          <div className="flex rounded-xl bg-slate-100 p-1 mb-6 border border-slate-200">
-            <button
-              id="auth-tab-login"
-              type="button"
-              onClick={() => {
-                setAuthScreen('login');
-                setErrorMessage(null);
-              }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                authScreen === 'login'
-                  ? 'bg-white text-teal-700 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Masuk (Login)
-            </button>
-            <button
-              id="auth-tab-register"
-              type="button"
-              onClick={() => {
-                setAuthScreen('register');
-                setErrorMessage(null);
-              }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                authScreen === 'register'
-                  ? 'bg-white text-teal-700 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Daftar (Sign Up)
-            </button>
-          </div>
-
           {/* Error notification */}
           {errorMessage && (
             <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2.5">
@@ -153,253 +78,141 @@ export function AuthView() {
           )}
 
           {/* LOGIN FORM */}
-          {authScreen === 'login' && (
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                  Username atau Email
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                Username atau Email
+              </label>
+              <div className="relative rounded-xl">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <User className="w-4 h-4" />
+                </div>
+                <input
+                  id="login-identifier-input"
+                  type="text"
+                  required
+                  value={loginIdentifier}
+                  onChange={(e) => setLoginIdentifier(e.target.value)}
+                  placeholder="Contoh: staging, kasir1, spv1"
+                  className="block w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-slate-700">
+                  Kata Sandi
                 </label>
-                <div className="relative rounded-xl">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <User className="w-4 h-4" />
-                  </div>
-                  <input
-                    id="login-identifier-input"
-                    type="text"
-                    required
-                    value={loginIdentifier}
-                    onChange={(e) => setLoginIdentifier(e.target.value)}
-                    placeholder="Contoh: staging atau kasir1"
-                    className="block w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-                  />
-                </div>
               </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-medium text-slate-700">
-                    Kata Sandi
-                  </label>
+              <div className="relative rounded-xl">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Lock className="w-4 h-4" />
                 </div>
-                <div className="relative rounded-xl">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <input
-                    id="login-password-input"
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="block w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-2">
+                <input
+                  id="login-password-input"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="block w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+                />
                 <button
-                  id="btn-login-submit"
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-md shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
-                  <span>{isLoading ? 'Memvalidasi Sesi...' : 'Masuk ke Aplikasi'}</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
 
-              {/* Demo / Role Quick Test Selector */}
-              <div className="mt-6 pt-5 border-t border-slate-100">
-                <div className="p-3.5 bg-teal-50/50 border border-teal-100 rounded-xl space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-teal-800 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                      Uji Masuk Cepat Antar Role
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => fillAccount('staging', 'StagingDemo2026!')}
-                      className="p-2 text-left rounded-lg bg-white border border-teal-200 hover:bg-teal-50 transition-colors cursor-pointer"
-                    >
-                      <span className="font-semibold text-teal-900 block">Owner / Admin</span>
-                      <span className="text-[10px] text-slate-500 font-mono">@staging</span>
-                    </button>
+            <div className="pt-2">
+              <button
+                id="btn-login-submit"
+                type="submit"
+                disabled={isLoading}
+                className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-md shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
+              >
+                <span>{isLoading ? 'Memvalidasi Sesi...' : 'Masuk ke Aplikasi'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
 
-                    <button
-                      type="button"
-                      onClick={() => fillAccount('kasir1', 'KasirWarung2026!')}
-                      className="p-2 text-left rounded-lg bg-white border border-teal-200 hover:bg-teal-50 transition-colors cursor-pointer"
-                    >
-                      <span className="font-semibold text-teal-900 block">Kasir</span>
-                      <span className="text-[10px] text-slate-500 font-mono">@kasir1</span>
-                    </button>
+            {/* Role Quick Test Selector */}
+            <div className="mt-6 pt-5 border-t border-slate-100">
+              <div className="p-3.5 bg-teal-50/50 border border-teal-100 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-teal-800 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                    Uji Masuk Cepat Antar Role
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => fillAccount('staging', 'StagingDemo2026!')}
+                    className="p-2 text-left rounded-lg bg-white border border-teal-200 hover:bg-teal-50 transition-colors cursor-pointer"
+                  >
+                    <span className="font-semibold text-teal-900 block">Owner / Admin</span>
+                    <span className="text-[10px] text-slate-500 font-mono">@staging</span>
+                  </button>
 
-                    <button
-                      type="button"
-                      onClick={() => fillAccount('finance1', 'FinanceWarung2026!')}
-                      className="p-2 text-left rounded-lg bg-white border border-teal-200 hover:bg-teal-50 transition-colors cursor-pointer"
-                    >
-                      <span className="font-semibold text-teal-900 block">Finance / Akuntan</span>
-                      <span className="text-[10px] text-slate-500 font-mono">@finance1</span>
-                    </button>
+                  <button
+                    type="button"
+                    onClick={() => fillAccount('spv1', 'SpvWarung2026!')}
+                    className="p-2 text-left rounded-lg bg-white border border-teal-200 hover:bg-teal-50 transition-colors cursor-pointer"
+                  >
+                    <span className="font-semibold text-teal-900 block">Supervisor</span>
+                    <span className="text-[10px] text-slate-500 font-mono">@spv1</span>
+                  </button>
 
-                    <button
-                      type="button"
-                      onClick={() => fillAccount('gudang1', 'GudangWarung2026!')}
-                      className="p-2 text-left rounded-lg bg-white border border-teal-200 hover:bg-teal-50 transition-colors cursor-pointer"
-                    >
+                  <button
+                    type="button"
+                    onClick={() => fillAccount('kasir1', 'KasirWarung2026!')}
+                    className="p-2 text-left rounded-lg bg-white border border-teal-200 hover:bg-teal-50 transition-colors cursor-pointer"
+                  >
+                    <span className="font-semibold text-teal-900 block">Kasir</span>
+                    <span className="text-[10px] text-slate-500 font-mono">@kasir1</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => fillAccount('finance1', 'FinanceWarung2026!')}
+                    className="p-2 text-left rounded-lg bg-white border border-teal-200 hover:bg-teal-50 transition-colors cursor-pointer"
+                  >
+                    <span className="font-semibold text-teal-900 block">Finance / Akuntan</span>
+                    <span className="text-[10px] text-slate-500 font-mono">@finance1</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => fillAccount('gudang1', 'GudangWarung2026!')}
+                    className="col-span-2 p-2 text-left rounded-lg bg-white border border-teal-200 hover:bg-teal-50 transition-colors cursor-pointer flex items-center justify-between"
+                  >
+                    <div>
                       <span className="font-semibold text-teal-900 block">Staff Gudang</span>
                       <span className="text-[10px] text-slate-500 font-mono">@gudang1</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          )}
-
-          {/* REGISTER FORM */}
-          {authScreen === 'register' && (
-            <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Nama Lengkap Pemilik
-                </label>
-                <div className="relative rounded-xl">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <User className="w-4 h-4" />
-                  </div>
-                  <input
-                    id="register-name-input"
-                    type="text"
-                    required
-                    value={regName}
-                    onChange={(e) => {
-                      setRegName(e.target.value);
-                      if (!regUsername) {
-                        setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
-                      }
-                    }}
-                    placeholder="Contoh: Budi Santoso"
-                    className="block w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Username Akun (Login ID)
-                </label>
-                <div className="relative rounded-xl">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-mono">
-                    @
-                  </div>
-                  <input
-                    id="register-username-input"
-                    type="text"
-                    required
-                    value={regUsername}
-                    onChange={(e) => setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
-                    placeholder="budisantoso"
-                    className="block w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 font-mono placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Alamat Email Client (Opsional)
-                </label>
-                <div className="relative rounded-xl">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <Mail className="w-4 h-4" />
-                  </div>
-                  <input
-                    id="register-email-input"
-                    type="email"
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="nama@bisnis.com"
-                    className="block w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Kata Sandi
-                  </label>
-                  <input
-                    id="register-password-input"
-                    type="password"
-                    required
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Min. 6 karakter"
-                    className="block w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Konfirmasi Sandi
-                  </label>
-                  <input
-                    id="register-confirm-password-input"
-                    type="password"
-                    required
-                    value={regConfirmPassword}
-                    onChange={(e) => setRegConfirmPassword(e.target.value)}
-                    placeholder="Ulangi kata sandi"
-                    className="block w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  id="btn-register-submit"
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-md shadow-teal-600/20 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
-                >
-                  <span>{isLoading ? 'Mendaftarkan Akun...' : 'Daftar & Lanjut ke Onboarding'}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="text-center pt-2">
-                <p className="text-xs text-slate-500">
-                  Sudah memiliki akun?{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthScreen('login');
-                      setErrorMessage(null);
-                    }}
-                    className="font-semibold text-teal-600 hover:underline cursor-pointer"
-                  >
-                    Masuk di sini
+                    </div>
+                    <span className="text-[10px] text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">Landing: Inventori</span>
                   </button>
-                </p>
+                </div>
               </div>
-            </form>
-          )}
+            </div>
+
+            <div className="pt-2 text-center">
+              <p className="text-[11px] text-slate-400">
+                Sistem Internal Klien — Akun dibuat &amp; dikelola terpusat oleh Owner melalui menu Manajemen Pengguna.
+              </p>
+            </div>
+          </form>
         </div>
 
         {/* Security & Authentication Info */}
         <p className="mt-4 text-center text-xs text-slate-400 flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-4 h-4 text-teal-600" />
-          <span>Autentikasi Aman & Isolasi Data Akun Terproteksi RLS</span>
+          <span>Sistem Akses Terproteksi Berbasis Peran (RBAC)</span>
         </p>
       </div>
     </div>

@@ -25,12 +25,14 @@ import {
   Clock,
   Sparkles,
   ChevronRight,
+  ShieldCheck,
+  Server,
+  Database,
+  Check,
 } from 'lucide-react';
-import { SubscriptionModal } from '@/components/SubscriptionModal';
 import { formatRupiah } from '@/lib/utils';
-import { SubscriptionTier } from '@/types';
 
-type SettingsTab = 'business' | 'account' | 'subscription';
+type SettingsTab = 'business' | 'account' | 'system';
 
 export function SettingsView() {
   const {
@@ -76,35 +78,7 @@ export function SettingsView() {
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
 
-  // Subscription state
-  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
-  const [subscriptionSuccessMessage, setSubscriptionSuccessMessage] = useState<string | null>(null);
-
-  const currentSubscription = settings.subscription || {
-    tier: 'trial' as SubscriptionTier,
-    status: 'active' as const,
-    expiresAt: '2026-12-31T23:59:59.000Z',
-    activeBranchesLimit: 1,
-    maxUsersLimit: 3,
-    billingCycle: 'monthly' as const,
-  };
-
-  const handleSelectPlan = async (tier: SubscriptionTier) => {
-    const updatedSettings = {
-      ...settings,
-      subscription: {
-        ...currentSubscription,
-        tier,
-        status: 'active' as const,
-        activeBranchesLimit: tier === 'pro' ? 2 : 1,
-        maxUsersLimit: tier === 'pro' ? 999 : 3,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    };
-    await updateSettings(updatedSettings);
-    setSubscriptionSuccessMessage(`Paket berhasil diperbarui ke ${tier.toUpperCase()}.`);
-    setTimeout(() => setSubscriptionSuccessMessage(null), 3500);
-  };
+  // System license state
 
   const handleLogoFile = (file?: File) => {
     if (!file) return;
@@ -285,18 +259,18 @@ export function SettingsView() {
 
         <button
           type="button"
-          id="tab-btn-subscription"
-          onClick={() => setActiveTab('subscription')}
+          id="tab-btn-system"
+          onClick={() => setActiveTab('system')}
           className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'subscription'
+            activeTab === 'system'
               ? 'bg-teal-50 text-teal-700 shadow-xs border border-teal-200'
               : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 border border-transparent'
           }`}
         >
-          <Zap className="w-4 h-4" />
-          <span>Langganan</span>
+          <ShieldCheck className="w-4 h-4" />
+          <span>Lisensi & Sistem</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 font-bold uppercase tracking-wider">
-            {currentSubscription.tier}
+            Enterprise
           </span>
         </button>
       </div>
@@ -733,169 +707,128 @@ export function SettingsView() {
       )}
 
       {/* ======================================================== */}
-      {/* SECTION: PAKET & LANGGANAN                              */}
+      {/* SECTION: LISENSI & SPESIFIKASI SISTEM                   */}
       {/* ======================================================== */}
-      {activeTab === 'subscription' && (
+      {activeTab === 'system' && (
         <div className="space-y-6 animate-in fade-in duration-150">
-          {subscriptionSuccessMessage && (
-            <div className="p-3.5 bg-teal-50 border border-teal-200 rounded-xl flex items-center space-x-2 text-xs text-teal-700 font-semibold shadow-xs">
-              <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />
-              <span>{subscriptionSuccessMessage}</span>
-            </div>
-          )}
-
-          {/* Current Active Plan Overview Card */}
+          {/* Dedicated License Card */}
           <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
               <div className="flex items-center space-x-3.5">
                 <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center shrink-0">
-                  <Zap className="w-6 h-6" />
+                  <ShieldCheck className="w-6 h-6" />
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
-                    <h3 className="text-base font-bold text-slate-900 capitalize">
-                      Paket {currentSubscription.tier}
+                    <h3 className="text-base font-bold text-slate-900">
+                      Dedicated Client License
                     </h3>
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-100 text-teal-800 border border-teal-200">
-                      {currentSubscription.status === 'active' ? 'Aktif' : 'Kedaluwarsa'}
+                      Aktif Penuh
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Masa aktif hingga:{' '}
+                    Instalasi & Kepemilikan Sistem Khusus:{' '}
                     <span className="font-semibold text-slate-800">
-                      {new Date(currentSubscription.expiresAt).toLocaleDateString('id-ID', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      })}
+                      {settings.name || 'Warung Juara'}
                     </span>
                   </p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                id="btn-open-upgrade-modal"
-                onClick={() => setIsSubscriptionModalOpen(true)}
-                className="flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-              >
-                <span>Ubah / Perpanjang Paket</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center space-x-2 text-xs font-semibold text-teal-700 bg-teal-50 px-3.5 py-2 rounded-xl border border-teal-200 w-fit">
+                <Check className="w-4 h-4" />
+                <span>Enterprise Unlocked</span>
+              </div>
             </div>
 
-            {/* Quota & Feature Allowances */}
+            {/* Quota & System Capabilities */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-[11px] text-slate-500 block mb-1">Maksimal Cabang</span>
-                <div className="flex items-baseline space-x-1.5">
-                  <span className="text-lg font-bold text-slate-900">
-                    {currentSubscription.activeBranchesLimit}
-                  </span>
-                  <span className="text-slate-500">Cabang</span>
+                <div className="flex items-center space-x-2 text-slate-500 mb-1">
+                  <Building2 className="w-4 h-4 text-teal-600" />
+                  <span className="text-[11px] font-medium">Multi-Cabang & Gudang</span>
                 </div>
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  {currentSubscription.tier === 'pro'
-                    ? 'Bisa ditambah add-on cabang'
-                    : 'Upgrade ke Pro untuk 2+ cabang'}
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-lg font-bold text-slate-900">Unlimited</span>
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  Bebas menambah cabang outlet & gudang kapan saja tanpa batasan.
                 </span>
               </div>
 
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-[11px] text-slate-500 block mb-1">Maksimal Pengguna Kasir</span>
-                <div className="flex items-baseline space-x-1.5">
-                  <span className="text-lg font-bold text-slate-900">
-                    {currentSubscription.maxUsersLimit >= 999
-                      ? 'Unlimited'
-                      : currentSubscription.maxUsersLimit}
-                  </span>
-                  <span className="text-slate-500">Akun</span>
+                <div className="flex items-center space-x-2 text-slate-500 mb-1">
+                  <User className="w-4 h-4 text-teal-600" />
+                  <span className="text-[11px] font-medium">Akun Kasir & Pengguna</span>
                 </div>
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  Role: Owner, Supervisor, Kasir
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-lg font-bold text-slate-900">Unlimited</span>
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  Hak akses Owner, Supervisor, Kasir, dan Gudang tanpa kuota.
                 </span>
               </div>
 
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-[11px] text-slate-500 block mb-1">Metode Pembaruan</span>
-                <div className="flex items-baseline space-x-1.5">
-                  <span className="text-sm font-bold text-slate-900">WhatsApp Pilot</span>
+                <div className="flex items-center space-x-2 text-slate-500 mb-1">
+                  <Database className="w-4 h-4 text-teal-600" />
+                  <span className="text-[11px] font-medium">Penyimpanan & Keamanan</span>
                 </div>
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  Verifikasi manual & direct support
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-base font-bold text-slate-900">Cloud Database</span>
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  Enkripsi Row-Level Security & Backup otomatis berkala.
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Quick Comparison Card in Settings */}
+          {/* Technical Specifications & Deployment Info */}
           <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-4">
-            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-              Daftar Paket Software POS
+            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+              <Server className="w-4 h-4 text-slate-500" />
+              <span>Detail Sistem & Pemeliharaan (Maintenance)</span>
             </h4>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Basic Summary */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h5 className="font-bold text-slate-900 text-sm">Paket Basic</h5>
-                    <span className="text-xs font-bold text-slate-800 font-mono">
-                      Rp 149.000 / bln
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Sangat pas untuk 1 toko tunggal dengan perputaran kasir shift dan pencatatan laci kasir rapi.
-                  </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span className="text-slate-500">Versi Rilis POS:</span>
+                  <span className="font-mono font-semibold text-slate-800">v2.5.0-enterprise</span>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-200/70">
-                  <button
-                    type="button"
-                    onClick={() => setIsSubscriptionModalOpen(true)}
-                    className="text-xs font-semibold text-teal-700 hover:text-teal-800 transition-colors cursor-pointer"
-                  >
-                    Lihat detail fitur & rekening →
-                  </button>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span className="text-slate-500">Tipe Sistem:</span>
+                  <span className="font-medium text-slate-800">Custom Web POS & ERP Internal</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span className="text-slate-500">Status Server & Database:</span>
+                  <span className="inline-flex items-center space-x-1 text-emerald-700 font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>Aktif & Terhubung</span>
+                  </span>
                 </div>
               </div>
 
-              {/* Pro Summary */}
-              <div className="p-4 rounded-xl border border-teal-200 bg-teal-50/30 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h5 className="font-bold text-slate-900 text-sm">Paket Pro Multi-Outlet</h5>
-                    <span className="text-xs font-bold text-teal-800 font-mono">
-                      Rp 299.000 / bln
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Untuk 2+ cabang, transfer stok antar-cabang, stock opname terjadwal, dan integrasi marketplace.
-                  </p>
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span className="text-slate-500">Masa Berlaku Lisensi:</span>
+                  <span className="font-semibold text-teal-700">Permanen (Lifetime)</span>
                 </div>
-                <div className="mt-4 pt-3 border-t border-teal-200/70">
-                  <button
-                    type="button"
-                    onClick={() => setIsSubscriptionModalOpen(true)}
-                    className="text-xs font-semibold text-teal-700 hover:text-teal-800 transition-colors cursor-pointer"
-                  >
-                    Lihat detail fitur & rekening →
-                  </button>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span className="text-slate-500">Mode Kerja Kasir:</span>
+                  <span className="font-medium text-slate-800">Online & Offline Resilience</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span className="text-slate-500">Bantuan Teknis:</span>
+                  <span className="font-medium text-slate-800">Support Khusus Pengembang</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
       )}
-
-      {/* Subscription Selection Modal */}
-      <SubscriptionModal
-        isOpen={isSubscriptionModalOpen}
-        onClose={() => setIsSubscriptionModalOpen(false)}
-        currentTier={currentSubscription.tier}
-        storeName={settings.name || 'Warung Juara'}
-        ownerName={settings.ownerName || user?.name || 'Owner'}
-        onSelectPlan={handleSelectPlan}
-      />
     </div>
   );
 }
